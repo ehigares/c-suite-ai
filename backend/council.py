@@ -18,6 +18,16 @@ from typing import List, Dict, Any, Tuple, Optional
 from .client import query_models_parallel, query_model
 from .config import get_chairman
 
+# Hardcoded — not user-editable per spec
+_SUMMARIZATION_PROMPT = (
+    "You are maintaining a running summary of a multi-turn conversation for context. "
+    "You will be given the current summary (if any) and a set of new exchanges to incorporate. "
+    "Write an updated summary of 3–6 sentences covering: the user's overall goal, key decisions "
+    "or conclusions reached, important constraints or preferences established, and any open "
+    "questions still being worked on. Be factual, concise, and write in third person "
+    "(e.g. \"The user is trying to...\"). Do not editorialize."
+)
+
 
 def _build_history_prefix(history: Optional[Dict[str, Any]]) -> str:
     """
@@ -391,3 +401,80 @@ async def run_full_council(
     }
 
     return stage1_results, stage2_results, stage3_result, metadata
+
+
+async def run_background_summarization(
+    conversation_id: str,
+    conversation: Dict[str, Any],
+    summarization_model: Dict[str, Any],
+    raw_exchanges_to_keep: int = 3,
+):
+    """
+    Compress conversation history into a running summary.
+
+    Called after Stage 3 completes, non-blocking (fire-and-forget via asyncio.create_task).
+    Silently skips on any error — never crashes the main request flow.
+
+    The exchanges older than `raw_exchanges_to_keep` are compressed together with
+    the existing running summary into a new, updated summary.
+
+    Args:
+        conversation_id: Used to write the result back to storage
+        conversation: Full conversation dict at the time of the trigger
+        summarization_model: Model config dict for the summarization model
+        raw_exchanges_to_keep: How many recent exchanges to leave as raw (not summarized)
+    """
+    try:
+        from .storage import update_running_summary
+
+        # Extract all complete exchanges (user + chairman pairs) from message history
+        messages = conversation.get("messages", [])
+        exchanges = []
+        i = 0
+        while i < len(messages) - 1:
+            if messages[i].get("role") == "user" and messages[i + 1].get("role") == "assistant":
+                chairman_response = messages[i + 1].get("stage3", {}).get("response", "")
+                exchanges.append({
+                    "user": messages[i]["content"],
+                    "chairman": chairman_response,
+                })
+                i += 2
+            else:
+                i += 1
+
+        if not exchanges:
+            return
+
+        # Only compress exchanges that are older than the raw window.
+        # If all exchanges fit in the raw window, nothing to compress yet.
+        exchanges_to_compress = exchanges[:-raw_exchanges_to_keep] if len(exchanges) > raw_exchanges_to_keep else []
+        if not exchanges_to_compress:
+            return
+
+        current_summary = conversation.get("running_summary", "")
+
+        # Build the message to the summarization model
+        exchanges_text = "\n\n".join(
+            f"User: {ex['user']}\nChairman: {ex['chairman']}"
+            for ex in exchanges_to_compress
+        )
+        content_parts = []
+        if current_summary:
+            content_parts.append(f"Current summary:\n{current_summary}")
+        content_parts.append(f"Exchanges to incorporate:\n{exchanges_text}")
+
+        messages_payload = [
+            {"role": "system", "content": _SUMMARIZATION_PROMPT},
+            {"role": "user", "content": "\n\n".join(content_parts)},
+        ]
+
+        response = await query_model(summarization_model, messages_payload, timeout=60.0)
+
+        if response and response.get("content"):
+            updated_at = len(exchanges)
+            update_running_summary(conversation_id, response["content"], updated_at)
+            print(f"[summarization] Updated summary for {conversation_id} at exchange {updated_at}")
+
+    except Exception as e:
+        # Best-effort — never let summarization failures surface to the user
+        print(f"[summarization] Warning: failed for {conversation_id}: {e}")

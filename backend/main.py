@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from . import storage
 from .client import check_endpoint_health
-from .config import load_config, save_config, get_chairman, get_models_by_ids
+from .config import load_config, save_config, get_chairman, get_models_by_ids, get_summarization_model
 from .council import (
     run_full_council,
     generate_conversation_title,
@@ -20,6 +20,7 @@ from .council import (
     stage2_collect_rankings,
     stage3_synthesize_final,
     calculate_aggregate_rankings,
+    run_background_summarization,
 )
 
 app = FastAPI(title="LLM Council API")
@@ -277,8 +278,12 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
 
     council_config = conversation.get("council_config", {})
 
+    # Load global config to get user's raw-exchanges setting
+    global_config = load_config()
+    raw_exchanges = global_config.get("history_raw_exchanges", 3)
+
     # Build history for this request (summary + recent raw exchanges)
-    history = storage.build_history(conversation)
+    history = storage.build_history(conversation, raw_exchanges)
 
     if is_first_message:
         chairman = get_chairman(council_config)
@@ -293,6 +298,15 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     )
 
     storage.add_assistant_message(conversation_id, stage1_results, stage2_results, stage3_result)
+
+    # Trigger background summarization every 5 exchanges (non-blocking)
+    updated_conv = storage.get_conversation(conversation_id)
+    exchange_count = storage.count_exchanges(updated_conv)
+    summ_model = get_summarization_model(global_config)
+    if summ_model and exchange_count > 0 and exchange_count % 5 == 0:
+        asyncio.create_task(
+            run_background_summarization(conversation_id, updated_conv, summ_model, raw_exchanges)
+        )
 
     return {
         "stage1": stage1_results,
@@ -315,13 +329,17 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
     is_first_message = len(conversation["messages"]) == 0
     council_config = conversation.get("council_config", {})
 
+    # Load global config once — used for history window and summarization model
+    global_config = load_config()
+    raw_exchanges = global_config.get("history_raw_exchanges", 3)
+
     async def event_generator():
         try:
             storage.add_user_message(conversation_id, request.content)
 
-            # Build history before running stages
+            # Build history before running stages, using user's configured window size
             conv = storage.get_conversation(conversation_id)
-            history = storage.build_history(conv)
+            history = storage.build_history(conv, raw_exchanges)
 
             from .config import get_models_by_ids
             council_model_ids = council_config.get("council_model_ids", [])
@@ -367,6 +385,15 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             storage.add_assistant_message(
                 conversation_id, stage1_results, stage2_results, stage3_result
             )
+
+            # Trigger background summarization every 5 exchanges (non-blocking fire-and-forget)
+            updated_conv = storage.get_conversation(conversation_id)
+            exchange_count = storage.count_exchanges(updated_conv)
+            summ_model = get_summarization_model(global_config)
+            if summ_model and exchange_count > 0 and exchange_count % 5 == 0:
+                asyncio.create_task(
+                    run_background_summarization(conversation_id, updated_conv, summ_model, raw_exchanges)
+                )
 
             yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 

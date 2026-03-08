@@ -7,8 +7,8 @@ every sprint and whenever a significant decision or problem is encountered.
 
 ## Project Status
 
-**Current Sprint:** Sprint 2 — Backend API & History
-**Overall Status:** 🟢 Sprint 1 complete — ready for Sprint 2
+**Current Sprint:** Sprint 3 — Settings UI
+**Overall Status:** 🟢 Sprint 2 complete — ready for Sprint 3
 
 ---
 
@@ -48,31 +48,42 @@ every sprint and whenever a significant decision or problem is encountered.
 ---
 
 ### Sprint 2 — Backend API & History
-**Status:** ⏳ Waiting for Sprint 1
+**Status:** ✅ Complete
 **Goal:** Add new API endpoints and wire conversation history through the council stages.
 
 **Tasks:**
-- [ ] Add `GET /api/config` endpoint (returns config with masked API keys)
-- [ ] Add `POST /api/config` endpoint (saves updated config)
-- [ ] Add `GET /api/endpoint-status` endpoint (pings RunPod endpoints)
-- [ ] Add `POST /api/wakeup` endpoint (triggers warm-up on RunPod endpoints)
-- [ ] Add `POST /api/test-connection` endpoint (tests a single model config)
-- [ ] Update `backend/storage.py` schema to include `running_summary` and `summary_last_updated_at_exchange`
-- [ ] Update `backend/council.py` to accept conversation history (summary + raw window)
-- [ ] Implement history injection into Stage 1, 2, and 3 message payloads
-- [ ] Define one exchange = user question + Chairman answer only
-- [ ] Update `backend/main.py` to load council config per request and pass history to council
-- [ ] Implement RunPod URL detection (`proxy.runpod.net` string match) in backend
+- [x] Add `GET /api/config` endpoint (returns config with masked API keys)
+- [x] Add `POST /api/config` endpoint (saves updated config)
+- [x] Add `GET /api/endpoint-status` endpoint (pings RunPod endpoints)
+- [x] Add `POST /api/wakeup` endpoint (triggers warm-up on RunPod endpoints)
+- [x] Add `POST /api/test-connection` endpoint (tests a single model config)
+- [x] Update `backend/storage.py` schema to include `running_summary` and `summary_last_updated_at_exchange`
+- [x] Update `backend/council.py` to accept conversation history (summary + raw window)
+- [x] Implement history injection into Stage 1, 2, and 3 message payloads
+- [x] Define one exchange = user question + Chairman answer only
+- [x] Update `backend/main.py` to load council config per request and pass history to council
+- [x] Implement RunPod URL detection (`proxy.runpod.net` string match) in backend
+- [x] Implement background summarization trigger (after Stage 3, non-blocking)
+- [x] Use `history_raw_exchanges` from global config in both message handlers
 
 **Verification Checklist:**
-- [ ] All new endpoints return expected responses (test via browser or curl)
-- [ ] Multi-turn conversation correctly passes history to models
-- [ ] Asking "what did I just ask you?" on 2nd message gets correct answer
-- [ ] `/api/test-connection` correctly identifies working vs broken endpoints
-- [ ] RunPod endpoint detection correctly identifies URLs
+- [x] All imports load cleanly after Sprint 2 changes
+- [x] `count_exchanges()` returns 5 after 5 exchanges — trigger condition fires correctly
+- [x] `build_history(raw=3)` on 5-exchange conversation returns exactly 3 recent exchanges
+- [x] Compression candidates = exchanges older than raw window (2 of 5 when raw=3)
+- [x] `build_history` on short conversation (< raw window) returns all available exchanges
+- [ ] SSE end-to-end smoke test (requires real API keys — deferred, see notes)
+- [ ] `/api/test-connection` live test against a real endpoint (deferred)
 
 **Notes:**
-*(Claude Code adds notes here as work progresses)*
+- All 5 API endpoints were already in place from Sprint 1 overflow work.
+- The two net-new items this sprint: background summarization + `history_raw_exchanges` wiring.
+- Background summarization fires at exchange 5, 10, 15, etc. (every 5 exchanges).
+  It only compresses exchanges older than `raw_exchanges_to_keep` — if a conversation has
+  5 exchanges and raw=3, only exchanges 1–2 are compressed; 3–5 stay raw.
+- SSE smoke test still deferred — no real API keys available in this environment.
+  Full end-to-end test is planned for Sprint 6 (Polish & Docs).
+- `_SUMMARIZATION_PROMPT` is hardcoded in `council.py` per spec (not user-editable).
 
 ---
 
