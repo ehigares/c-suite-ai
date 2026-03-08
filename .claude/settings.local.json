@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(uv run:*)",
+      "Bash(python3:*)",
+      "Read(//c/Users/ehiga/AppData/Local/uv/**)",
+      "Read(//c/Users/ehiga/.cargo/**)",
+      "Read(//c/Users/ehiga/**)",
+      "Bash(C:/Users/ehiga/AppData/Local/Programs/Python/Python312-arm64/python.exe:*)"
+    ]
+  }
+}
