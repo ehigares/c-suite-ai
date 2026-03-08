@@ -1,166 +1,176 @@
-# CLAUDE.md - Technical Notes for LLM Council
+# CLAUDE.md — LLM Council Project Standing Orders
 
-This file contains technical details, architectural decisions, and important implementation notes for future development sessions.
+This file contains instructions that Claude Code must follow throughout the entire project.
+Read this file completely before doing anything else in any session.
 
-## Project Overview
+---
 
-LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively answer user questions. The key innovation is anonymized peer review in Stage 2, preventing models from playing favorites.
+## Who This Project Is For
 
-## Architecture
+This app is being built for **non-technical users** who will self-host it. Every decision about
+naming, UI copy, error messages, and code structure should be made with that audience in mind.
+If something would confuse a non-technical user, simplify it.
 
-### Backend Structure (`backend/`)
+---
 
-**`config.py`**
-- Contains `COUNCIL_MODELS` (list of OpenRouter model identifiers)
-- Contains `CHAIRMAN_MODEL` (model that synthesizes final answer)
-- Uses environment variable `OPENROUTER_API_KEY` from `.env`
-- Backend runs on **port 8001** (NOT 8000 - user had another app on 8000)
+## The Build Specification
 
-**`openrouter.py`**
-- `query_model()`: Single async model query
-- `query_models_parallel()`: Parallel queries using `asyncio.gather()`
-- Returns dict with 'content' and optional 'reasoning_details'
-- Graceful degradation: returns None on failure, continues with successful responses
+The complete project plan lives in `BUILD_SPEC.md` in this folder. It contains every decision
+that has been made about this project. **Before writing any code, read BUILD_SPEC.md.**
 
-**`council.py`** - The Core Logic
-- `stage1_collect_responses()`: Parallel queries to all council models
-- `stage2_collect_rankings()`:
-  - Anonymizes responses as "Response A, B, C, etc."
-  - Creates `label_to_model` mapping for de-anonymization
-  - Prompts models to evaluate and rank (with strict format requirements)
-  - Returns tuple: (rankings_list, label_to_model_dict)
-  - Each ranking includes both raw text and `parsed_ranking` list
-- `stage3_synthesize_final()`: Chairman synthesizes from all responses + rankings
-- `parse_ranking_from_text()`: Extracts "FINAL RANKING:" section, handles both numbered lists and plain format
-- `calculate_aggregate_rankings()`: Computes average rank position across all peer evaluations
+If you are ever unsure whether something is in scope, check BUILD_SPEC.md first. Do not invent
+features or make architectural decisions that aren't documented there without explicitly flagging
+it to the user and asking for approval.
 
-**`storage.py`**
-- JSON-based conversation storage in `data/conversations/`
-- Each conversation: `{id, created_at, messages[]}`
-- Assistant messages contain: `{role, stage1, stage2, stage3}`
-- Note: metadata (label_to_model, aggregate_rankings) is NOT persisted to storage, only returned via API
+---
 
-**`main.py`**
-- FastAPI app with CORS enabled for localhost:5173 and localhost:3000
-- POST `/api/conversations/{id}/message` returns metadata in addition to stages
-- Metadata includes: label_to_model mapping and aggregate_rankings
+## Self-Check Rules (Follow These Every Time)
 
-### Frontend Structure (`frontend/src/`)
+Before considering any task complete, you must run through this checklist:
 
-**`App.jsx`**
-- Main orchestration: manages conversations list and current conversation
-- Handles message sending and metadata storage
-- Important: metadata is stored in the UI state for display but not persisted to backend JSON
+### 1 — Does it match the spec?
+Re-read the relevant section of BUILD_SPEC.md and confirm your implementation matches what
+was decided. If you deviated from the spec for a good reason, flag it explicitly:
+> "I deviated from the spec here because [reason]. Is that okay?"
 
-**`components/ChatInterface.jsx`**
-- Multiline textarea (3 rows, resizable)
-- Enter to send, Shift+Enter for new line
-- User messages wrapped in markdown-content class for padding
+### 2 — Did you handle the edge cases?
+Every feature in this project has documented edge cases in BUILD_SPEC.md. Check that your
+implementation handles them. Key ones to never forget:
+- Empty API key → omit Authorization header entirely (never send `Bearer `)
+- Orphaned chairman/summarization model IDs → detect on load, clear, show warning banner
+- Empty model pool → show friendly prompt, never show empty picker
+- No summarization model set → hard block on new conversations
+- Missing model in old conversation → warning, continue with available models
+- `data/` directory → always `mkdir -p` before writing, `.gitkeep` keeps it in repo
 
-**`components/Stage1.jsx`**
-- Tab view of individual model responses
-- ReactMarkdown rendering with markdown-content wrapper
+### 3 — Did you test it?
+After implementing anything, verify it actually works. Use the `webapp-testing` skill to
+open the app in a browser and confirm the behavior visually where possible. For backend
+changes, confirm via curl or the browser network tab.
 
-**`components/Stage2.jsx`**
-- **Critical Feature**: Tab view showing RAW evaluation text from each model
-- De-anonymization happens CLIENT-SIDE for display (models receive anonymous labels)
-- Shows "Extracted Ranking" below each evaluation so users can validate parsing
-- Aggregate rankings shown with average position and vote count
-- Explanatory text clarifies that boldface model names are for readability only
+### 4 — Did you update the dev journal?
+After completing each sprint task, add a brief entry to `DEV_JOURNAL.md` documenting:
+- What you built
+- Any decisions you made that weren't in the spec
+- Any problems you ran into and how you solved them
+- What the next task is
 
-**`components/Stage3.jsx`**
-- Final synthesized answer from chairman
-- Green-tinted background (#f0fff0) to highlight conclusion
+### 5 — Is the code clean and documented?
+- Add comments to any logic that isn't immediately obvious
+- Use clear variable and function names — no cryptic abbreviations
+- Keep functions small and single-purpose
+- Never leave TODO comments without flagging them to the user
 
-**Styling (`*.css`)**
-- Light mode theme (not dark mode)
-- Primary color: #4a90e2 (blue)
-- Global markdown styling in `index.css` with `.markdown-content` class
-- 12px padding on all markdown content to prevent cluttered appearance
+---
 
-## Key Design Decisions
+## Architecture Rules (Never Violate These)
 
-### Stage 2 Prompt Format
-The Stage 2 prompt is very specific to ensure parseable output:
-```
-1. Evaluate each response individually first
-2. Provide "FINAL RANKING:" header
-3. Numbered list format: "1. Response C", "2. Response A", etc.
-4. No additional text after ranking section
-```
+- **client.py handles ALL API calls** — no model calls anywhere else
+- **Config always loads from `data/council_config.json`** — never hardcode model details
+- **One exchange = user question + Chairman answer only** — never include Stage 1/2 in history
+- **Summarization runs after Stage 3, non-blocking** — never make the user wait for it
+- **API keys never appear in logs, conversation files, or frontend responses**
+- **RunPod detection = string match for `proxy.runpod.net`** — same logic front and back
+- **Empty `api_key` = omit Authorization header** — never send a blank Bearer token
 
-This strict format allows reliable parsing while still getting thoughtful evaluations.
+---
 
-### De-anonymization Strategy
-- Models receive: "Response A", "Response B", etc.
-- Backend creates mapping: `{"Response A": "openai/gpt-5.1", ...}`
-- Frontend displays model names in **bold** for readability
-- Users see explanation that original evaluation used anonymous labels
-- This prevents bias while maintaining transparency
+## Sprint Structure
 
-### Error Handling Philosophy
-- Continue with successful responses if some models fail (graceful degradation)
-- Never fail the entire request due to single model failure
-- Log errors but don't expose to user unless all models fail
+This project is divided into sprints. Work on **one sprint at a time**. Do not start the next
+sprint until the current one is complete and verified.
 
-### UI/UX Transparency
-- All raw outputs are inspectable via tabs
-- Parsed rankings shown below raw text for validation
-- Users can verify system's interpretation of model outputs
-- This builds trust and allows debugging of edge cases
+At the start of each sprint:
+1. Read this file
+2. Read BUILD_SPEC.md sections relevant to the sprint
+3. Read DEV_JOURNAL.md to understand what's been done so far
+4. Confirm the plan with the user before writing code
 
-## Important Implementation Details
+At the end of each sprint:
+1. Run the sprint's verification checklist
+2. Update DEV_JOURNAL.md
+3. Tell the user clearly: "Sprint X is complete. Here's what was built and verified. Ready for Sprint X+1 when you are."
 
-### Relative Imports
-All backend modules use relative imports (e.g., `from .config import ...`) not absolute imports. This is critical for Python's module system to work correctly when running as `python -m backend.main`.
+---
 
-### Port Configuration
-- Backend: 8001 (changed from 8000 to avoid conflict)
-- Frontend: 5173 (Vite default)
-- Update both `backend/main.py` and `frontend/src/api.js` if changing
+## Current Sprint Reference
 
-### Markdown Rendering
-All ReactMarkdown components must be wrapped in `<div className="markdown-content">` for proper spacing. This class is defined globally in `index.css`.
+See DEV_JOURNAL.md for the current sprint status.
 
-### Model Configuration
-Models are hardcoded in `backend/config.py`. Chairman can be same or different from council members. The current default is Gemini as chairman per user preference.
+The full sprint list is:
 
-## Common Gotchas
+| Sprint | Focus | Key Deliverables |
+|---|---|---|
+| 1 | Foundation & Config | client.py, config.py, example config, data/ setup |
+| 2 | Backend API & History | New endpoints, council.py history support, storage schema |
+| 3 | Settings UI | Wizard, model pool management, tabs, warnings |
+| 4 | Council Picker & Wake-Up | CouncilPicker.jsx, WakeUpButton.jsx, Favorites Council |
+| 5 | Summarization Wiring | Background summarization trigger, storage, end-to-end test |
+| 6 | Polish & Docs | README, RUNPOD_SETUP.md, .gitignore, example config, badges |
 
-1. **Module Import Errors**: Always run backend as `python -m backend.main` from project root, not from backend directory
-2. **CORS Issues**: Frontend must match allowed origins in `main.py` CORS middleware
-3. **Ranking Parse Failures**: If models don't follow format, fallback regex extracts any "Response X" patterns in order
-4. **Missing Metadata**: Metadata is ephemeral (not persisted), only available in API responses
+---
 
-## Future Enhancement Ideas
+## Communication Style
 
-- Configurable council/chairman via UI instead of config file
-- Streaming responses instead of batch loading
-- Export conversations to markdown/PDF
-- Model performance analytics over time
-- Custom ranking criteria (not just accuracy/insight)
-- Support for reasoning models (o1, etc.) with special handling
+- Always explain what you're about to do before doing it
+- If something is complex, break it into steps and confirm before proceeding
+- Never make large sweeping changes without warning
+- If you hit an error you can't resolve in 2 attempts, stop and explain the situation clearly
+- Prefer simple, readable solutions over clever ones
 
-## Testing Notes
+---
 
-Use `test_openrouter.py` to verify API connectivity and test different model identifiers before adding to council. The script tests both streaming and non-streaming modes.
+## Files You Must Never Touch
 
-## Data Flow Summary
+- Any existing conversation JSON files in `data/conversations/`
+- The original `start.sh` unless explicitly asked
+- `.env` files
 
-```
-User Query
-    ↓
-Stage 1: Parallel queries → [individual responses]
-    ↓
-Stage 2: Anonymize → Parallel ranking queries → [evaluations + parsed rankings]
-    ↓
-Aggregate Rankings Calculation → [sorted by avg position]
-    ↓
-Stage 3: Chairman synthesis with full context
-    ↓
-Return: {stage1, stage2, stage3, metadata}
-    ↓
-Frontend: Display with tabs + validation UI
-```
+## Files You Must Never Commit
 
-The entire flow is async/parallel where possible to minimize latency.
+- `data/council_config.json` (contains API keys)
+- Any `.env` files
+- These must be in `.gitignore` — verify this in Sprint 1
+
+---
+
+---
+
+# Original Codebase Technical Notes
+*The following notes came with the original repository and describe important quirks
+of the existing codebase. These are preserved so Claude Code is aware of them.*
+
+---
+
+## Backend Structure (`backend/`)
+
+- `council.py`: Core orchestration — stage1, stage2, stage3, parse_ranking_from_text,
+  calculate_aggregate_rankings
+- `storage.py`: JSON-based conversation storage in `data/conversations/`
+- `config.py`: Model configuration (being redesigned in Sprint 1)
+- `openrouter.py`: Async HTTP client (being renamed to `client.py` in Sprint 1)
+- `main.py`: FastAPI app, SSE streaming endpoints on port 8001
+
+## Frontend Structure (`frontend/`)
+
+- React + Vite, runs on port 5173
+- All ReactMarkdown components must be wrapped in `<div className="markdown-content">`
+  for proper spacing — this class is defined globally in `index.css`
+
+## Known Quirks
+
+- **Always run backend as `python -m backend.main` from project root** — NOT from
+  inside the backend directory. Module import errors will occur otherwise.
+- **CORS**: Frontend must match allowed origins in `main.py` CORS middleware
+- **Ranking Parse Failures**: If models don't follow format, fallback regex extracts
+  any "Response X" patterns in order
+- **Metadata is ephemeral**: label_to_model and aggregate_rankings are not persisted
+  to storage — only available in live API responses
+- **API Connectivity Testing**: Use `test_openrouter.py` to verify API connectivity
+  and test model identifiers before adding to council
+
+## Stage 2 Anonymization
+
+Models receive labels "Response A", "Response B", etc. — never model names.
+Backend creates mapping: `{"Response A": "openai/gpt-5.1", ...}`
+Frontend displays model names in bold after de-anonymization.
