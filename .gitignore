@@ -12,8 +12,9 @@ wheels/
 # Keys and secrets
 .env
 
-# Data files
-data/
+# Data files — keep the directory in git, but never commit config (API keys) or user conversations
+data/council_config.json
+data/conversations/
 
 # Frontend
 frontend/node_modules/

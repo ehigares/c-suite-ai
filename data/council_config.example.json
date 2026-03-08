@@ -1,0 +1,39 @@
+{
+  "available_models": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "display_name": "Llama 3.3 70B (RunPod)",
+      "model": "llama3.3:70b",
+      "base_url": "https://YOUR-ENDPOINT-ID-11434.proxy.runpod.net/v1",
+      "api_key": ""
+    },
+    {
+      "id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "display_name": "GPT-4o (OpenRouter)",
+      "model": "openai/gpt-4o",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key": "sk-or-YOUR-OPENROUTER-KEY-HERE"
+    },
+    {
+      "id": "c2e4a3f1-5b7d-4e8c-9f0a-1b2c3d4e5f60",
+      "display_name": "Claude Sonnet (OpenRouter)",
+      "model": "anthropic/claude-sonnet-4-5",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key": "sk-or-YOUR-OPENROUTER-KEY-HERE"
+    },
+    {
+      "id": "d3f5b4e2-6c8e-5f9d-a0b1-2c3d4e5f6a71",
+      "display_name": "Gemini Pro (OpenRouter)",
+      "model": "google/gemini-pro-1.5",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key": "sk-or-YOUR-OPENROUTER-KEY-HERE"
+    }
+  ],
+  "chairman_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  "summarization_model_id": "c2e4a3f1-5b7d-4e8c-9f0a-1b2c3d4e5f60",
+  "favorites_council": [
+    "550e8400-e29b-41d4-a716-446655440000",
+    "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+  ],
+  "history_raw_exchanges": 3
+}
