@@ -174,3 +174,59 @@ of the existing codebase. These are preserved so Claude Code is aware of them.*
 Models receive labels "Response A", "Response B", etc. — never model names.
 Backend creates mapping: `{"Response A": "openai/gpt-5.1", ...}`
 Frontend displays model names in bold after de-anonymization.
+---
+
+## Security Architecture (added Sprint 7)
+
+This app handles user API keys and must be treated as a security-sensitive
+codebase. Read this section before touching any auth, config, or API code.
+
+### Authentication Flow
+- All API endpoints require a valid JWT session token in the Authorization
+  header EXCEPT: GET / (frontend), POST /api/login, GET /api/health
+- Tokens are issued by POST /api/login, signed with a secret stored in
+  data/.secret, and expire after 24 hours of inactivity
+- Failed logins are rate-limited: 5 attempts then 15-minute lockout
+- The frontend stores the token in sessionStorage (clears on tab close)
+- LoginScreen.jsx is shown when no valid token exists
+
+### API Key Encryption
+- API keys in council_config.json are encrypted with Fernet
+- Encryption key is derived from the user's password via PBKDF2
+- Salt is stored in data/.salt — NEVER commit this file, NEVER delete it
+- Keys are decrypted in memory only, never written to disk in plaintext
+- If data/.salt is deleted, all stored API keys are permanently unrecoverable
+- The _strip_council_keys() and key masking functions must remain in place
+
+### Sensitive Files (all gitignored)
+- data/council_config.json — contains encrypted API keys
+- data/.salt — encryption salt, loss = permanent key loss
+- data/.secret — JWT signing secret
+- data/conversations/ — user conversation data
+
+### Rate Limiting
+- slowapi is used for rate limiting on all endpoints
+- Do not remove or bypass rate limit decorators
+- Limits: stream=10/min, conversations=20/min, login=5/min
+
+### Input Validation Rules
+- base_url: must be valid http:// or https:// URL
+- api_key: strip whitespace, max 200 chars
+- display_name: strip HTML, max 50 chars  
+- model: strip whitespace, max 100 chars
+- Message size: max 32,000 characters
+- Config schema: validated with Pydantic before any disk write
+
+### CORS & Bind Address
+- Backend bind address and CORS origins are both controlled by the
+  ALLOWED_ORIGINS environment variable
+- Default: localhost only (most secure)
+- Never widen CORS without also considering the bind address
+- Document any changes to network exposure in README
+
+### General Security Rules
+- Never log full API keys — mask as sk-...xxxx
+- Never return unmasked keys in any API response
+- Never skip input validation "just for testing"
+- Always validate config schema before writing to disk
+- Rate limit decorators must stay on all public endpoints
