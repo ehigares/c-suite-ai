@@ -63,6 +63,7 @@ class Conversation(BaseModel):
     created_at: str
     title: str
     messages: List[Dict[str, Any]]
+    council_config: Optional[Dict[str, Any]] = None
 
 
 class TestConnectionRequest(BaseModel):
@@ -104,6 +105,22 @@ def _mask_api_keys(config: Dict[str, Any]) -> Dict[str, Any]:
     # Strip internal keys
     masked.pop("_warnings", None)
     return masked
+
+
+def _strip_council_keys(conversation: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Return a copy of a conversation dict with API keys fully removed from
+    the locked council_config snapshot.
+
+    The frontend only needs display_name and base_url (for source badges).
+    It never needs any part of the real API key, so we blank them entirely.
+    Applied to every endpoint that returns a full conversation object.
+    """
+    import copy
+    conv = copy.deepcopy(conversation)
+    for m in conv.get("council_config", {}).get("available_models", []):
+        m["api_key"] = ""
+    return conv
 
 
 @app.get("/api/config")
@@ -251,7 +268,7 @@ async def create_conversation(request: CreateConversationRequest):
 
     conversation_id = str(uuid.uuid4())
     conversation = storage.create_conversation(conversation_id, council_snapshot)
-    return conversation
+    return _strip_council_keys(conversation)
 
 
 @app.get("/api/conversations/{conversation_id}", response_model=Conversation)
@@ -260,7 +277,8 @@ async def get_conversation(conversation_id: str):
     conversation = storage.get_conversation(conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    return conversation
+
+    return _strip_council_keys(conversation)
 
 
 @app.post("/api/conversations/{conversation_id}/message")

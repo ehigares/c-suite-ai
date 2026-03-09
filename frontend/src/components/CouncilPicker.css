@@ -1,0 +1,198 @@
+/*
+ * NOTE: This file uses .btn-primary, .btn-secondary, .btn-large, and .btn-sm
+ * which are defined in Settings.css. Since Settings is always mounted in App.jsx,
+ * those classes are always available. Do not remove the Settings import from App.jsx.
+ */
+
+/* ── CouncilPicker container ─────────────────────────────────────────────── */
+
+.council-picker {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 40px 24px 24px;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.council-picker-inner {
+  width: 100%;
+  max-width: 560px;
+}
+
+.council-picker h2 {
+  font-size: 22px;
+  color: #222;
+  margin-bottom: 6px;
+}
+
+.council-picker-subtitle {
+  font-size: 14px;
+  color: #777;
+  margin-bottom: 24px;
+}
+
+/* ── Empty pool state ────────────────────────────────────────────────────── */
+
+.picker-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  border: 2px dashed #e0e0e0;
+  border-radius: 10px;
+  color: #888;
+}
+
+.picker-empty-state p {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.picker-empty-state p:last-of-type {
+  margin-bottom: 20px;
+}
+
+/* ── Model list ──────────────────────────────────────────────────────────── */
+
+.picker-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.picker-model-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  user-select: none;
+}
+
+.picker-model-item:hover {
+  background: #f8f8f8;
+}
+
+.picker-model-item.selected {
+  background: #f0f6ff;
+  border-color: #4a90e2;
+}
+
+.picker-model-item input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+  flex-shrink: 0;
+  accent-color: #4a90e2;
+}
+
+.picker-model-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.picker-model-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.picker-model-id {
+  font-size: 12px;
+  color: #999;
+  font-family: monospace;
+}
+
+.chairman-badge {
+  font-size: 11px;
+  background: #fef9c3;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ── Selection summary bar ───────────────────────────────────────────────── */
+
+.picker-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f8f8f8;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: #555;
+}
+
+.picker-selection-count {
+  font-weight: 500;
+}
+
+.picker-select-all-btn {
+  background: none;
+  border: none;
+  color: #4a90e2;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.picker-select-all-btn:hover {
+  text-decoration: underline;
+}
+
+/* ── Inline warnings ─────────────────────────────────────────────────────── */
+
+.picker-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.picker-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.picker-warning-yellow {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.picker-warning-blue {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  color: #1e40af;
+}
+
+/* ── Footer actions ──────────────────────────────────────────────────────── */
+
+.picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* Reuse shared button classes from Settings.css (btn-primary, btn-secondary) */

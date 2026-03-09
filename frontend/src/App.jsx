@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
+import CouncilPicker from './components/CouncilPicker';
+import Settings from './components/Settings';
 import { api } from './api';
 import './App.css';
 
@@ -10,12 +12,22 @@ function App() {
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load conversations on mount
+  // Settings panel
+  const [showSettings, setShowSettings] = useState(false);
+  const [forceWizard, setForceWizard] = useState(false);
+
+  // Council picker — shown instead of ChatInterface when starting a new conversation
+  const [showPicker, setShowPicker] = useState(false);
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+
+  // Global council config — drives warnings and CouncilPicker model list
+  const [councilConfig, setCouncilConfig] = useState(null);
+
   useEffect(() => {
     loadConversations();
+    loadCouncilConfig();
   }, []);
 
-  // Load conversation details when selected
   useEffect(() => {
     if (currentConversationId) {
       loadConversation(currentConversationId);
@@ -40,20 +52,103 @@ function App() {
     }
   };
 
-  const handleNewConversation = async () => {
+  const loadCouncilConfig = async () => {
     try {
-      const newConv = await api.createConversation();
-      setConversations([
-        { id: newConv.id, created_at: newConv.created_at, message_count: 0 },
-        ...conversations,
-      ]);
-      setCurrentConversationId(newConv.id);
-    } catch (error) {
-      console.error('Failed to create conversation:', error);
+      const cfg = await api.getConfig();
+      setCouncilConfig(cfg);
+    } catch {
+      // Backend not running yet — no warnings shown
     }
   };
 
+  // ── Warning / blocking logic ─────────────────────────────────────────────
+
+  const blockingWarnings = useMemo(() => {
+    if (!councilConfig) return [];
+    const warnings = [];
+
+    if (councilConfig._warnings?.includes('chairman_orphaned')) {
+      warnings.push(
+        '⚠ Your Chairman model has been removed from the pool. Please reassign one in Settings → Defaults.'
+      );
+    }
+    if (councilConfig._warnings?.includes('summarization_orphaned')) {
+      warnings.push(
+        '⚠ Your Summarization model has been removed from the pool. Please reassign one in Settings → History.'
+      );
+    }
+
+    const hasModels = (councilConfig.available_models?.length ?? 0) > 0;
+    if (hasModels && !councilConfig.summarization_model_id) {
+      warnings.push(
+        '⚠ No summarization model selected — new conversations are blocked. Go to Settings → History to fix this.'
+      );
+    }
+
+    return warnings;
+  }, [councilConfig]);
+
+  const isNewConversationBlocked = blockingWarnings.length > 0;
+  const blockReason = isNewConversationBlocked
+    ? 'Fix the warnings shown in the chat area before starting a new conversation.'
+    : undefined;
+
+  // ── Settings handlers ───────────────────────────────────────────────────
+
+  const handleOpenSettings = () => {
+    setForceWizard(false);
+    setShowSettings(true);
+  };
+
+  const handleOpenWizard = () => {
+    setForceWizard(true);
+    setShowSettings(true);
+  };
+
+  const handleCloseSettings = () => {
+    setShowSettings(false);
+    setForceWizard(false);
+  };
+
+  const handleConfigSaved = () => {
+    loadCouncilConfig();
+  };
+
+  // ── Conversation handlers ───────────────────────────────────────────────
+
+  // "New Conversation" now shows the CouncilPicker instead of immediately creating one
+  const handleNewConversation = () => {
+    if (isNewConversationBlocked) return;
+    setCurrentConversation(null);
+    setCurrentConversationId(null);
+    setShowPicker(true);
+  };
+
+  // Called by CouncilPicker when user clicks "Start Conversation"
+  const handleStartConversation = async (selectedModelIds) => {
+    setIsCreatingConversation(true);
+    try {
+      const newConv = await api.createConversation(selectedModelIds);
+      setConversations((prev) => [
+        { id: newConv.id, created_at: newConv.created_at, title: newConv.title, message_count: 0 },
+        ...prev,
+      ]);
+      setCurrentConversationId(newConv.id);
+      setCurrentConversation(newConv);
+      setShowPicker(false);
+    } catch (error) {
+      console.error('Failed to create conversation:', error);
+    } finally {
+      setIsCreatingConversation(false);
+    }
+  };
+
+  const handleCancelPicker = () => {
+    setShowPicker(false);
+  };
+
   const handleSelectConversation = (id) => {
+    setShowPicker(false);
     setCurrentConversationId(id);
   };
 
@@ -62,117 +157,94 @@ function App() {
 
     setIsLoading(true);
     try {
-      // Optimistically add user message to UI
       const userMessage = { role: 'user', content };
       setCurrentConversation((prev) => ({
         ...prev,
         messages: [...prev.messages, userMessage],
       }));
 
-      // Create a partial assistant message that will be updated progressively
       const assistantMessage = {
         role: 'assistant',
         stage1: null,
         stage2: null,
         stage3: null,
         metadata: null,
-        loading: {
-          stage1: false,
-          stage2: false,
-          stage3: false,
-        },
+        loading: { stage1: false, stage2: false, stage3: false },
       };
 
-      // Add the partial assistant message
       setCurrentConversation((prev) => ({
         ...prev,
         messages: [...prev.messages, assistantMessage],
       }));
 
-      // Send message with streaming
       await api.sendMessageStream(currentConversationId, content, (eventType, event) => {
         switch (eventType) {
           case 'stage1_start':
             setCurrentConversation((prev) => {
               const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.loading.stage1 = true;
+              messages[messages.length - 1].loading.stage1 = true;
               return { ...prev, messages };
             });
             break;
-
           case 'stage1_complete':
             setCurrentConversation((prev) => {
               const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.stage1 = event.data;
-              lastMsg.loading.stage1 = false;
+              const last = messages[messages.length - 1];
+              last.stage1 = event.data;
+              last.loading.stage1 = false;
               return { ...prev, messages };
             });
             break;
-
           case 'stage2_start':
             setCurrentConversation((prev) => {
               const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.loading.stage2 = true;
+              messages[messages.length - 1].loading.stage2 = true;
               return { ...prev, messages };
             });
             break;
-
           case 'stage2_complete':
             setCurrentConversation((prev) => {
               const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.stage2 = event.data;
-              lastMsg.metadata = event.metadata;
-              lastMsg.loading.stage2 = false;
+              const last = messages[messages.length - 1];
+              last.stage2 = event.data;
+              last.metadata = event.metadata;
+              last.loading.stage2 = false;
               return { ...prev, messages };
             });
             break;
-
           case 'stage3_start':
             setCurrentConversation((prev) => {
               const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.loading.stage3 = true;
+              messages[messages.length - 1].loading.stage3 = true;
               return { ...prev, messages };
             });
             break;
-
           case 'stage3_complete':
             setCurrentConversation((prev) => {
               const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.stage3 = event.data;
-              lastMsg.loading.stage3 = false;
+              const last = messages[messages.length - 1];
+              last.stage3 = event.data;
+              last.loading.stage3 = false;
               return { ...prev, messages };
             });
             break;
-
           case 'title_complete':
-            // Reload conversations to get updated title
             loadConversations();
             break;
-
           case 'complete':
-            // Stream complete, reload conversations list
             loadConversations();
             setIsLoading(false);
             break;
-
           case 'error':
             console.error('Stream error:', event.message);
             setIsLoading(false);
             break;
-
           default:
             console.log('Unknown event type:', eventType);
         }
       });
     } catch (error) {
       console.error('Failed to send message:', error);
-      // Remove optimistic messages on error
       setCurrentConversation((prev) => ({
         ...prev,
         messages: prev.messages.slice(0, -2),
@@ -181,6 +253,8 @@ function App() {
     }
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────
+
   return (
     <div className="app">
       <Sidebar
@@ -188,11 +262,34 @@ function App() {
         currentConversationId={currentConversationId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        onOpenSettings={handleOpenSettings}
+        onOpenWizard={handleOpenWizard}
+        isNewConversationBlocked={isNewConversationBlocked}
+        blockReason={blockReason}
       />
-      <ChatInterface
-        conversation={currentConversation}
-        onSendMessage={handleSendMessage}
-        isLoading={isLoading}
+
+      {showPicker ? (
+        <CouncilPicker
+          config={councilConfig}
+          onStart={handleStartConversation}
+          onCancel={handleCancelPicker}
+          onOpenWizard={handleOpenWizard}
+          isCreating={isCreatingConversation}
+        />
+      ) : (
+        <ChatInterface
+          conversation={currentConversation}
+          onSendMessage={handleSendMessage}
+          isLoading={isLoading}
+          warnings={blockingWarnings}
+        />
+      )}
+
+      <Settings
+        isOpen={showSettings}
+        onClose={handleCloseSettings}
+        onConfigSaved={handleConfigSaved}
+        forceWizard={forceWizard}
       />
     </div>
   );

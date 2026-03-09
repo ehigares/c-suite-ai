@@ -1,0 +1,127 @@
+/* ── WakeUpButton ─────────────────────────────────────────────────────────── */
+
+.wakeup-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1.5px solid transparent;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s, background 0.2s;
+  position: relative;
+}
+
+.wakeup-btn:disabled {
+  cursor: default;
+}
+
+/* Dot indicator */
+.wakeup-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Red state (cold / not checked / failed) ─────────────────────────────── */
+
+.wakeup-btn.state-red {
+  background: #fff5f5;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.wakeup-btn.state-red:hover {
+  background: #fee2e2;
+}
+
+.wakeup-btn.state-red .wakeup-dot {
+  background: #dc2626;
+}
+
+/* ── Yellow / warming state ──────────────────────────────────────────────── */
+
+.wakeup-btn.state-yellow {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #92400e;
+  cursor: default;
+}
+
+.wakeup-btn.state-yellow .wakeup-dot {
+  background: #f59e0b;
+  animation: wakeup-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes wakeup-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.3; transform: scale(0.7); }
+}
+
+/* ── Green state (ready) ─────────────────────────────────────────────────── */
+
+.wakeup-btn.state-green {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #15803d;
+  cursor: default;
+}
+
+.wakeup-btn.state-green .wakeup-dot {
+  background: #16a34a;
+}
+
+/* ── Tooltip ─────────────────────────────────────────────────────────────── */
+
+.wakeup-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.wakeup-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: #1f2937;
+  color: #f9fafb;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+  max-width: 280px;
+  white-space: normal;
+  z-index: 100;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.wakeup-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 16px;
+  border: 5px solid transparent;
+  border-top-color: #1f2937;
+}
+
+/* Show tooltip on hover of wrapper */
+.wakeup-wrapper .wakeup-tooltip {
+  display: none;
+}
+
+.wakeup-wrapper:hover .wakeup-tooltip {
+  display: block;
+}
+
+/* ── Failed model list ────────────────────────────────────────────────────── */
+
+.wakeup-failed-list {
+  margin-top: 4px;
+  padding-left: 14px;
+  font-size: 11px;
+}

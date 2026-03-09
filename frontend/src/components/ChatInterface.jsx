@@ -1,14 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import Stage1 from './Stage1';
 import Stage2 from './Stage2';
 import Stage3 from './Stage3';
+import WakeUpButton from './WakeUpButton';
+import { SourceBadge } from './Settings';
 import './ChatInterface.css';
 
 export default function ChatInterface({
   conversation,
   onSendMessage,
   isLoading,
+  warnings,
 }) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
@@ -30,16 +33,24 @@ export default function ChatInterface({
   };
 
   const handleKeyDown = (e) => {
-    // Submit on Enter (without Shift)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
     }
   };
 
+  // ── No conversation selected ───────────────────────────────────────────────
+
   if (!conversation) {
     return (
       <div className="chat-interface">
+        {warnings && warnings.length > 0 && (
+          <div className="warning-banners">
+            {warnings.map((w, i) => (
+              <div key={i} className="warning-banner-item">{w}</div>
+            ))}
+          </div>
+        )}
         <div className="empty-state">
           <h2>Welcome to LLM Council</h2>
           <p>Create a new conversation to get started</p>
@@ -48,8 +59,52 @@ export default function ChatInterface({
     );
   }
 
+  // ── Council header data ────────────────────────────────────────────────────
+  //
+  // Memoised on conversation.id so the array reference is stable across the
+  // many setCurrentConversation() calls that happen during SSE streaming.
+  // Without this, WakeUpButton's useEffect fires on every streamed chunk and
+  // resets the button state from green back to idle-red mid-conversation.
+
+  const councilModels = useMemo(
+    () => conversation.council_config?.available_models ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conversation.id]
+  );
+  const chairmanId = conversation.council_config?.chairman_id ?? '';
+
+  // ── Active conversation ────────────────────────────────────────────────────
+
   return (
     <div className="chat-interface">
+      {/* Global config warning banners */}
+      {warnings && warnings.length > 0 && (
+        <div className="warning-banners">
+          {warnings.map((w, i) => (
+            <div key={i} className="warning-banner-item">{w}</div>
+          ))}
+        </div>
+      )}
+
+      {/* Council header — model badges + wake-up button */}
+      {councilModels.length > 0 && (
+        <div className="council-header">
+          <div className="council-model-badges">
+            {councilModels.map((m) => (
+              <span key={m.id} className="council-model-badge">
+                <SourceBadge baseUrl={m.base_url} />
+                <span className="council-model-badge-name">{m.display_name}</span>
+                {m.id === chairmanId && (
+                  <span className="council-chairman-crown" title="Chairman">👑</span>
+                )}
+              </span>
+            ))}
+          </div>
+          <WakeUpButton councilModels={councilModels} />
+        </div>
+      )}
+
+      {/* Messages */}
       <div className="messages-container">
         {conversation.messages.length === 0 ? (
           <div className="empty-state">
@@ -120,26 +175,25 @@ export default function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
-      {conversation.messages.length === 0 && (
-        <form className="input-form" onSubmit={handleSubmit}>
-          <textarea
-            className="message-input"
-            placeholder="Ask your question... (Shift+Enter for new line, Enter to send)"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isLoading}
-            rows={3}
-          />
-          <button
-            type="submit"
-            className="send-button"
-            disabled={!input.trim() || isLoading}
-          >
-            Send
-          </button>
-        </form>
-      )}
+      {/* Message input — always visible for multi-turn conversations */}
+      <form className="input-form" onSubmit={handleSubmit}>
+        <textarea
+          className="message-input"
+          placeholder="Ask your question… (Shift+Enter for new line, Enter to send)"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={isLoading}
+          rows={3}
+        />
+        <button
+          type="submit"
+          className="send-button"
+          disabled={!input.trim() || isLoading}
+        >
+          Send
+        </button>
+      </form>
     </div>
   );
 }
