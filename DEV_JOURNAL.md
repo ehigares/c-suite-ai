@@ -7,8 +7,8 @@ every sprint and whenever a significant decision or problem is encountered.
 
 ## Project Status
 
-**Current Sprint:** Sprint 6 — Polish & Docs
-**Overall Status:** 🟢 Sprint 6 complete — all sprints done, ready for release
+**Current Sprint:** Sprint 8 — Bug Fixes & Reliability
+**Overall Status:** 🟢 Sprint 8 complete
 
 ---
 
@@ -284,6 +284,89 @@ Test E — WakeUpButton:
 
 ---
 
+### Sprint 7 — Security & Hardening
+**Status:** ✅ Complete
+**Goal:** Secure the app with password authentication, API key encryption at rest, rate limiting, input validation, and request size limits.
+
+**Tasks:**
+- [x] Add `cryptography`, `bcrypt`, `slowapi`, `PyJWT` to `pyproject.toml`
+- [x] Add `data/.salt`, `data/.secret` to `.gitignore`
+- [x] Implement password hashing (bcrypt) and verification in `config.py`
+- [x] Implement Fernet encryption/decryption for API keys (PBKDF2 key derivation)
+- [x] Generate/manage salt (`data/.salt`) and JWT secret (`data/.secret`)
+- [x] Implement `set_initial_password()`, `change_password()`, `login_and_cache_key()`
+- [x] Implement JWT session token creation and validation (24hr expiry)
+- [x] Add `POST /api/login` endpoint with lockout after 5 failures (15min)
+- [x] Add `POST /api/setup-password` for first-run
+- [x] Add `POST /api/change-password` with re-encryption flow
+- [x] Add `GET /api/health` and `GET /api/auth/status` endpoints
+- [x] Add JWT auth middleware — all endpoints require valid token except public ones
+- [x] Integrate slowapi rate limiting: stream=10/min, conversations=20/min, login=5/min
+- [x] Add input validation for model config fields (URL, key length, display name, model ID)
+- [x] Add 32,000 char message size limit (HTTP 413)
+- [x] Create `LoginScreen.jsx` with setup mode and login mode
+- [x] Wire auth token into all API calls (`api.js` rewrite with `authHeaders()` and `apiFetch()`)
+- [x] Gate App.jsx behind login screen when no valid token exists
+- [x] Handle 401/429/413 errors in frontend with friendly messages
+- [x] Add Security tab to Settings with password change form
+- [x] Update README with full Security section
+- [x] Update `pyproject.toml` dependencies
+
+**Verification Checklist:**
+- [x] All 47 existing pipeline tests still pass
+- [x] 9 new security unit tests pass (hashing, key derivation, encrypt/decrypt, JWT, login, save/load, change password)
+- [x] Frontend build clean: 210 modules, 0 errors, 0 warnings
+- [x] All backend imports clean
+- [x] `data/.salt` and `data/.secret` in `.gitignore`
+- [ ] Login flow end-to-end — needs live backend
+- [ ] Password change + re-encryption end-to-end — needs live backend
+- [ ] Rate limiting returns 429 — needs live backend
+- [ ] Message size limit returns 413 — needs live backend
+- [ ] First-run wizard password setup — needs live backend
+
+**Notes:**
+- `cryptography` package needed `--only-binary=:all:` flag on Windows ARM64 (no Rust toolchain available for source build). Version 46.0.3 has a pre-built wheel.
+- The Fernet key is cached in memory after login (`_fernet_key` module global in config.py). Server restart clears it — the next login re-derives it.
+- PBKDF2 uses 600,000 iterations (current OWASP recommendation) with SHA-256.
+- Password hash stored in `council_config.json` as `password_hash` field — never sent to frontend (stripped in `_mask_api_keys()`).
+- `save_config()` preserves the password hash from the existing file when callers don't pass it (since the config dict callers work with doesn't include it).
+- Login lockout is in-memory (resets on server restart) — acceptable for single-user self-hosted app.
+- Frontend stores JWT in `sessionStorage` (clears on tab close, as specified).
+- `apiFetch()` wrapper in api.js handles 401 (triggers login screen), 429, 413, and 422 globally.
+
+---
+
+### Sprint 8 — Bug Fixes & Reliability
+**Status:** ✅ Complete
+**Goal:** Fix known issues, add schema validation, improve test infrastructure, and tag v1.1.0.
+
+**Tasks:**
+- [x] Fix CORS/bind address mismatch — single `ALLOWED_ORIGINS` env var controls both CORS middleware and uvicorn bind address
+- [x] Fix `start.sh` race condition — replaced `sleep 2` with health-check poll loop (curl or Python urllib fallback, 30s timeout)
+- [x] Add Pydantic schema validation for `POST /api/config` — `CouncilConfigSchema` with `validate_references()` for cross-field checks
+- [x] Add ranking parse failure logging + UI warning icon — `parse_ranking_from_text` returns `(labels, fallback_used)` tuple; amber ⚠ icon in Stage 2
+- [x] Reorganize test suite — moved `test_pipeline.py` into `tests/` package, added `test_config.py` (30 tests) and `test_ranking.py` (24 tests), created `run_tests.sh` and `run_tests.ps1`
+- [x] Delete old root-level `test_pipeline.py`
+- [x] Update README with test docs, ALLOWED_ORIGINS docs, and v1.1.0 changelog
+- [x] Update DEV_JOURNAL with Sprint 8 completion
+- [x] Tag v1.1.0
+
+**Verification Checklist:**
+- [x] All 3 test suites pass: pipeline (47), config (30), ranking (24) — 101 total tests
+- [x] Frontend build clean: 210 modules, 0 errors, 0 warnings
+- [x] All backend imports clean
+- [x] `start.sh` poll loop works with both curl and Python fallback
+- [x] `CouncilConfigSchema` rejects invalid cross-references (chairman, summarization, favorites, history range)
+- [x] Ranking fallback warning icon appears in Stage 2 UI
+
+**Notes:**
+- `ALLOWED_ORIGINS` env var defaults to `http://localhost:5173,http://localhost:3000`. If any origin hostname is not localhost/127.0.0.1/::1, uvicorn binds to `0.0.0.0` instead of `127.0.0.1`.
+- `parse_ranking_from_text` return type changed from `List[str]` to `Tuple[List[str], bool]`. Both callers updated: `stage2_collect_rankings` propagates `ranking_fallback` flag, `calculate_aggregate_rankings` discards it with `_`.
+- Test suite uses custom `check()` function (not pytest) to keep dependencies minimal for self-hosting users.
+- Old root-level `test_pipeline.py` deleted; all tests now live in `tests/` package.
+
+---
+
 ## Decisions Made During Build
 
 *(Claude Code logs any decisions made during implementation that weren't in the original spec)*
@@ -292,6 +375,12 @@ Test E — WakeUpButton:
 |---|---|---|---|
 | 2026-03-08 | 1 | SSE smoke test deferred to Sprint 2 | No real API keys available in dev environment; endpoint code reviewed and confirmed correct structurally |
 | 2026-03-08 | 1 | `storage.py` schema additions included in Sprint 1 | `running_summary` and `summary_last_updated_at_exchange` are needed by `build_history()` which is called from `main.py`; coupling made it cleaner to implement together |
+| 2026-03-08 | 7 | PBKDF2 iterations set to 600,000 | Current OWASP recommendation for SHA-256; balances security with login speed |
+| 2026-03-08 | 7 | Minimum password length: 4 characters | Low bar appropriate for single-user self-hosted app; user controls their own security posture |
+| 2026-03-08 | 7 | Login lockout is in-memory only | Resets on server restart; acceptable for single-user app, avoids needing a persistent lockout store |
+| 2026-03-08 | 8 | Custom test framework instead of pytest | Keeps dependencies minimal for self-hosting non-technical users; no extra install needed |
+| 2026-03-08 | 8 | ALLOWED_ORIGINS controls both CORS and bind address | Single env var prevents mismatch where CORS allows an origin but uvicorn isn't listening on the right interface |
+| 2026-03-08 | 8 | parse_ranking_from_text returns tuple | Adding fallback flag as second return value is cleaner than a separate function; only 2 callers to update |
 
 ---
 
@@ -301,4 +390,4 @@ Test E — WakeUpButton:
 
 | Date | Sprint | Problem | Solution |
 |---|---|---|---|
-| — | — | — | — |
+| 2026-03-08 | 7 | `cryptography` package fails to build from source on Windows ARM64 (no Rust toolchain) | Use `--only-binary=:all:` flag to install pre-built wheel (v46.0.3 has ARM64 wheel) |

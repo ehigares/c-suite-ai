@@ -57,6 +57,11 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
          rankings[activeTab].parsed_ranking.length > 0 && (
           <div className="parsed-ranking">
             <strong>Extracted Ranking:</strong>
+            {rankings[activeTab].ranking_fallback && (
+              <span className="ranking-fallback-warning" title="This model did not follow the expected FINAL RANKING format. Rankings were extracted using a fallback method and may be less accurate.">
+                {' '} &#9888;
+              </span>
+            )}
             <ol>
               {rankings[activeTab].parsed_ranking.map((label, i) => (
                 <li key={i}>

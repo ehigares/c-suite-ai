@@ -1,18 +1,157 @@
 /**
  * API client for the LLM Council backend.
+ *
+ * All authenticated requests include the JWT token from sessionStorage.
+ * If a 401 response is received, the onAuthExpired callback is triggered
+ * so the app can show the login screen.
  */
 
 const API_BASE = 'http://localhost:8001';
 
+// Callback set by the app when auth expires — triggers login screen
+let _onAuthExpired = null;
+
+/**
+ * Register a callback to be called when the session token expires.
+ * The App component sets this on mount.
+ */
+export function setOnAuthExpired(callback) {
+  _onAuthExpired = callback;
+}
+
+/**
+ * Get the current auth token from sessionStorage.
+ */
+function getToken() {
+  return sessionStorage.getItem('council_token');
+}
+
+/**
+ * Save the auth token to sessionStorage.
+ */
+export function setToken(token) {
+  sessionStorage.setItem('council_token', token);
+}
+
+/**
+ * Clear the auth token from sessionStorage.
+ */
+export function clearToken() {
+  sessionStorage.removeItem('council_token');
+}
+
+/**
+ * Build headers for authenticated requests.
+ */
+function authHeaders(extra = {}) {
+  const headers = { 'Content-Type': 'application/json', ...extra };
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+/**
+ * Shared fetch wrapper that handles 401 (auth expired) and error responses.
+ */
+async function apiFetch(url, options = {}) {
+  const response = await fetch(url, options);
+
+  if (response.status === 401) {
+    clearToken();
+    if (_onAuthExpired) _onAuthExpired();
+    throw new Error('Session expired. Please log in again.');
+  }
+
+  if (response.status === 429) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || 'Too many requests. Please wait a moment and try again.');
+  }
+
+  if (response.status === 413) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || 'Message too long.');
+  }
+
+  if (response.status === 422) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || 'Invalid input.');
+  }
+
+  return response;
+}
+
 export const api = {
+  // ── Auth endpoints (no token needed) ─────────────────────────────────
+
+  /**
+   * Check if a password has been set (determines login vs setup screen).
+   */
+  async getAuthStatus() {
+    const response = await fetch(`${API_BASE}/api/auth/status`);
+    if (!response.ok) throw new Error('Failed to check auth status');
+    return response.json();
+  },
+
+  /**
+   * Log in with a password. Returns { token }.
+   */
+  async login(password) {
+    const response = await fetch(`${API_BASE}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Login failed.');
+    }
+    return response.json();
+  },
+
+  /**
+   * Set the initial password during first-run setup. Returns { token }.
+   */
+  async setupPassword(password) {
+    const response = await fetch(`${API_BASE}/api/setup-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Setup failed.');
+    }
+    return response.json();
+  },
+
+  /**
+   * Change the password. Returns { token, message }.
+   */
+  async changePassword(oldPassword, newPassword) {
+    const response = await apiFetch(`${API_BASE}/api/change-password`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Password change failed.');
+    }
+    return response.json();
+  },
+
+  // ── Authenticated endpoints ──────────────────────────────────────────
+
   /**
    * List all conversations.
    */
   async listConversations() {
-    const response = await fetch(`${API_BASE}/api/conversations`);
-    if (!response.ok) {
-      throw new Error('Failed to list conversations');
-    }
+    const response = await apiFetch(`${API_BASE}/api/conversations`, {
+      headers: authHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to list conversations');
     return response.json();
   },
 
@@ -21,9 +160,9 @@ export const api = {
    * @param {string[]} councilModelIds - UUIDs of models selected for this conversation
    */
   async createConversation(councilModelIds) {
-    const response = await fetch(`${API_BASE}/api/conversations`, {
+    const response = await apiFetch(`${API_BASE}/api/conversations`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ council_model_ids: councilModelIds }),
     });
     if (!response.ok) {
@@ -37,12 +176,11 @@ export const api = {
    * Get a specific conversation.
    */
   async getConversation(conversationId) {
-    const response = await fetch(
-      `${API_BASE}/api/conversations/${conversationId}`
+    const response = await apiFetch(
+      `${API_BASE}/api/conversations/${conversationId}`,
+      { headers: authHeaders() }
     );
-    if (!response.ok) {
-      throw new Error('Failed to get conversation');
-    }
+    if (!response.ok) throw new Error('Failed to get conversation');
     return response.json();
   },
 
@@ -50,19 +188,15 @@ export const api = {
    * Send a message in a conversation.
    */
   async sendMessage(conversationId, content) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE}/api/conversations/${conversationId}/message`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: authHeaders(),
         body: JSON.stringify({ content }),
       }
     );
-    if (!response.ok) {
-      throw new Error('Failed to send message');
-    }
+    if (!response.ok) throw new Error('Failed to send message');
     return response.json();
   },
 
@@ -72,7 +206,9 @@ export const api = {
    * a flat config object with _warnings attached so callers see one thing.
    */
   async getConfig() {
-    const response = await fetch(`${API_BASE}/api/config`);
+    const response = await apiFetch(`${API_BASE}/api/config`, {
+      headers: authHeaders(),
+    });
     if (!response.ok) throw new Error('Failed to load config');
     const data = await response.json();
     return { ...data.config, _warnings: data.warnings || [] };
@@ -84,9 +220,9 @@ export const api = {
    * Internal keys (starting with _) are stripped by the backend before writing.
    */
   async saveConfig(config) {
-    const response = await fetch(`${API_BASE}/api/config`, {
+    const response = await apiFetch(`${API_BASE}/api/config`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ config }),
     });
     if (!response.ok) throw new Error('Failed to save config');
@@ -99,9 +235,9 @@ export const api = {
    * @param {{ model: string, base_url: string, api_key: string }} modelConfig
    */
   async testConnection({ model, base_url, api_key }) {
-    const response = await fetch(`${API_BASE}/api/test-connection`, {
+    const response = await apiFetch(`${API_BASE}/api/test-connection`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ model, base_url, api_key }),
     });
     if (!response.ok) {
@@ -116,9 +252,9 @@ export const api = {
    * @param {string[]} councilModelIds - UUIDs of models in the current council
    */
   async wakeup(councilModelIds) {
-    const response = await fetch(`${API_BASE}/api/wakeup`, {
+    const response = await apiFetch(`${API_BASE}/api/wakeup`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ council_model_ids: councilModelIds }),
     });
     if (!response.ok) throw new Error('Wake-up request failed');
@@ -133,13 +269,11 @@ export const api = {
    * @returns {Promise<void>}
    */
   async sendMessageStream(conversationId, content, onEvent) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: authHeaders(),
         body: JSON.stringify({ content }),
       }
     );

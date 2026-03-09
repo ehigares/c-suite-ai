@@ -213,6 +213,12 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
   const [showModelForm, setShowModelForm] = useState(false);
   const [editingModel, setEditingModel] = useState(null);
 
+  // Security tab state
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordStatus, setPasswordStatus] = useState(null); // null | 'saving' | 'ok' | string (error)
+
   // Load config whenever panel opens
   useEffect(() => {
     if (isOpen) {
@@ -676,7 +682,7 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
         </div>
 
         <div className="settings-tabs">
-          {['models', 'defaults', 'history'].map((tab) => (
+          {['models', 'defaults', 'history', 'security'].map((tab) => (
             <button
               key={tab}
               className={`tab-btn ${activeTab === tab ? 'active' : ''}`}
@@ -691,6 +697,7 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
           {activeTab === 'models' && renderModelsTab()}
           {activeTab === 'defaults' && renderDefaultsTab()}
           {activeTab === 'history' && renderHistoryTab()}
+          {activeTab === 'security' && renderSecurityTab()}
         </div>
 
         <div className="settings-footer">
@@ -912,6 +919,99 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
             ))}
           </select>
         </div>
+      </div>
+    );
+  }
+
+  function renderSecurityTab() {
+    const handleChangePassword = async (e) => {
+      e.preventDefault();
+      setPasswordStatus(null);
+
+      if (newPassword.length < 4) {
+        setPasswordStatus('New password must be at least 4 characters.');
+        return;
+      }
+      if (newPassword !== confirmNewPassword) {
+        setPasswordStatus('New passwords do not match.');
+        return;
+      }
+
+      setPasswordStatus('saving');
+      try {
+        const result = await api.changePassword(oldPassword, newPassword);
+        // Update the stored token with the new one
+        if (result.token) {
+          sessionStorage.setItem('council_token', result.token);
+        }
+        setPasswordStatus('ok');
+        setOldPassword('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+      } catch (err) {
+        setPasswordStatus(err.message || 'Password change failed.');
+      }
+    };
+
+    return (
+      <div className="security-tab">
+        <h3>Change Password</h3>
+        <p className="field-help">
+          Your password protects this instance from unauthorized access and
+          encrypts your stored API keys. If you change it, all API keys will be
+          re-encrypted with the new password.
+        </p>
+
+        <form onSubmit={handleChangePassword} className="password-change-form">
+          <div className="form-group">
+            <label>Current Password</label>
+            <input
+              type="password"
+              value={oldPassword}
+              onChange={(e) => {
+                setOldPassword(e.target.value);
+                setPasswordStatus(null);
+              }}
+            />
+          </div>
+          <div className="form-group">
+            <label>New Password</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => {
+                setNewPassword(e.target.value);
+                setPasswordStatus(null);
+              }}
+            />
+          </div>
+          <div className="form-group">
+            <label>Confirm New Password</label>
+            <input
+              type="password"
+              value={confirmNewPassword}
+              onChange={(e) => {
+                setConfirmNewPassword(e.target.value);
+                setPasswordStatus(null);
+              }}
+            />
+          </div>
+
+          {passwordStatus === 'ok' && (
+            <div className="password-success">Password changed successfully.</div>
+          )}
+          {passwordStatus && passwordStatus !== 'ok' && passwordStatus !== 'saving' && (
+            <div className="password-error">{passwordStatus}</div>
+          )}
+
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={!oldPassword || !newPassword || passwordStatus === 'saving'}
+          >
+            {passwordStatus === 'saving' ? 'Changing...' : 'Change Password'}
+          </button>
+        </form>
       </div>
     );
   }

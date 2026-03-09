@@ -1,12 +1,16 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import CouncilPicker from './components/CouncilPicker';
 import Settings from './components/Settings';
-import { api } from './api';
+import LoginScreen from './components/LoginScreen';
+import { api, setOnAuthExpired, setToken, clearToken } from './api';
 import './App.css';
 
 function App() {
+  // Auth state — null means "checking", true/false means resolved
+  const [isAuthenticated, setIsAuthenticated] = useState(null);
+
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
@@ -23,16 +27,65 @@ function App() {
   // Global council config — drives warnings and CouncilPicker model list
   const [councilConfig, setCouncilConfig] = useState(null);
 
-  useEffect(() => {
-    loadConversations();
-    loadCouncilConfig();
+  // Register the auth-expired callback so api.js can trigger a logout
+  const handleAuthExpired = useCallback(() => {
+    setIsAuthenticated(false);
   }, []);
 
   useEffect(() => {
-    if (currentConversationId) {
+    setOnAuthExpired(handleAuthExpired);
+  }, [handleAuthExpired]);
+
+  // On mount, check if we have a valid token
+  useEffect(() => {
+    const token = sessionStorage.getItem('council_token');
+    if (token) {
+      // Try a lightweight authenticated call to verify the token is still valid
+      api.getConfig()
+        .then((cfg) => {
+          setCouncilConfig(cfg);
+          setIsAuthenticated(true);
+        })
+        .catch(() => {
+          // Token is expired or invalid
+          clearToken();
+          setIsAuthenticated(false);
+        });
+    } else {
+      // Check if password is even set — if not, show setup
+      api.getAuthStatus()
+        .then((status) => {
+          if (!status.password_set) {
+            // No password yet — show login/setup screen
+            setIsAuthenticated(false);
+          } else {
+            setIsAuthenticated(false);
+          }
+        })
+        .catch(() => {
+          setIsAuthenticated(false);
+        });
+    }
+  }, []);
+
+  // After authentication, load data
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadConversations();
+      loadCouncilConfig();
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (currentConversationId && isAuthenticated) {
       loadConversation(currentConversationId);
     }
-  }, [currentConversationId]);
+  }, [currentConversationId, isAuthenticated]);
+
+  const handleAuthenticated = (token) => {
+    setToken(token);
+    setIsAuthenticated(true);
+  };
 
   const loadConversations = async () => {
     try {
@@ -254,6 +307,16 @@ function App() {
   };
 
   // ── Render ──────────────────────────────────────────────────────────────
+
+  // Still checking auth status
+  if (isAuthenticated === null) {
+    return null;
+  }
+
+  // Not authenticated — show login/setup screen
+  if (!isAuthenticated) {
+    return <LoginScreen onAuthenticated={handleAuthenticated} />;
+  }
 
   return (
     <div className="app">

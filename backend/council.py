@@ -171,12 +171,13 @@ Now provide your evaluation and ranking:"""
         response = responses.get(model_config["id"])
         if response is not None:
             full_text = response.get("content", "")
-            parsed = parse_ranking_from_text(full_text)
+            parsed, fallback_used = parse_ranking_from_text(full_text)
             results.append({
                 "model_id": model_config["id"],
                 "model": model_config["display_name"],
                 "ranking": full_text,
                 "parsed_ranking": parsed,
+                "ranking_fallback": fallback_used,
             })
 
     return results, label_to_model
@@ -247,12 +248,13 @@ Provide a clear, well-reasoned final answer that represents the council's collec
     }
 
 
-def parse_ranking_from_text(ranking_text: str) -> List[str]:
+def parse_ranking_from_text(ranking_text: str) -> Tuple[List[str], bool]:
     """
     Parse the FINAL RANKING section from a model's response.
 
-    Returns a list of response labels in ranked order (e.g., ["Response C", "Response A", ...]).
-    Falls back to extracting any "Response X" patterns found in order.
+    Returns a tuple of:
+        - List of response labels in ranked order (e.g., ["Response C", "Response A", ...])
+        - bool indicating whether the fallback regex was used (True = fallback)
     """
     import re
 
@@ -263,12 +265,20 @@ def parse_ranking_from_text(ranking_text: str) -> List[str]:
             # Look for numbered list items: "1. Response A"
             numbered = re.findall(r"\d+\.\s*Response [A-Z]", ranking_section)
             if numbered:
-                return [re.search(r"Response [A-Z]", m).group() for m in numbered]
-            # Fallback: any "Response X" in order
-            return re.findall(r"Response [A-Z]", ranking_section)
+                return [re.search(r"Response [A-Z]", m).group() for m in numbered], False
+            # Fallback within FINAL RANKING section
+            fallback = re.findall(r"Response [A-Z]", ranking_section)
+            if fallback:
+                print(f"[ranking] Warning: FINAL RANKING section found but numbered format missing. "
+                      f"Fallback extracted {len(fallback)} labels. Response snippet: {ranking_section[:200]}")
+                return fallback, True
 
-    # No FINAL RANKING section found — grab any "Response X" patterns
-    return re.findall(r"Response [A-Z]", ranking_text)
+    # No FINAL RANKING section found — grab any "Response X" patterns from full text
+    fallback = re.findall(r"Response [A-Z]", ranking_text)
+    if fallback:
+        print(f"[ranking] Warning: No FINAL RANKING section. Fallback regex extracted {len(fallback)} "
+              f"labels from full response. Snippet: {ranking_text[:200]}")
+    return fallback, True
 
 
 def calculate_aggregate_rankings(
@@ -285,7 +295,7 @@ def calculate_aggregate_rankings(
     model_positions: Dict[str, List[int]] = defaultdict(list)
 
     for ranking in stage2_results:
-        parsed = parse_ranking_from_text(ranking["ranking"])
+        parsed, _fallback = parse_ranking_from_text(ranking["ranking"])
         for position, label in enumerate(parsed, start=1):
             if label in label_to_model:
                 model_name = label_to_model[label]

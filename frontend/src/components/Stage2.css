@@ -135,6 +135,12 @@
   font-size: 13px;
 }
 
+.ranking-fallback-warning {
+  color: #d97706;
+  font-size: 14px;
+  cursor: help;
+}
+
 .parsed-ranking ol {
   margin: 8px 0 0 0;
   padding-left: 24px;

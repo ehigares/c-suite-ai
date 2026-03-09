@@ -16,6 +16,10 @@ wheels/
 data/council_config.json
 data/conversations/
 
+# Security-sensitive files — never commit these
+data/.salt
+data/.secret
+
 # Frontend
 frontend/node_modules/
 frontend/dist/

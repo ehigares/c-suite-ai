@@ -6,20 +6,13 @@ govern how history is built, how the exchange count triggers summarization, and
 how the history prefix injected into model prompts is formatted.
 
 Run from the project root:
-    python test_pipeline.py
+    python -m tests.test_pipeline
 """
 
 import sys
 import asyncio
 from datetime import datetime, timezone
 
-# ---------------------------------------------------------------------------
-# Minimal stubs so imports work without the full app environment
-# ---------------------------------------------------------------------------
-
-# storage and council are importable from the project root because
-# "python -m backend.xxx" sets up the package, but plain "python test_pipeline.py"
-# needs the path adjusted.
 sys.path.insert(0, ".")
 
 from backend.storage import build_history, count_exchanges
@@ -111,11 +104,9 @@ def test_count_exchanges():
 def test_build_history():
     section("build_history()")
 
-    # Empty conversation
     check("empty conversation -> None",
           build_history(make_conversation(0)) is None)
 
-    # Fewer exchanges than raw window — all returned as recent, no summary needed
     h = build_history(make_conversation(2), raw_exchanges=3)
     check("2 exchanges, window=3 -> not None", h is not None)
     check("2 exchanges, window=3 -> 2 recent_exchanges",
@@ -123,12 +114,10 @@ def test_build_history():
     check("2 exchanges, window=3 -> empty summary",
           h["running_summary"] == "")
 
-    # Exactly window size
     h = build_history(make_conversation(3), raw_exchanges=3)
     check("3 exchanges, window=3 -> 3 recent",
           len(h["recent_exchanges"]) == 3)
 
-    # More exchanges than window — only last N returned
     h = build_history(make_conversation(5), raw_exchanges=3)
     check("5 exchanges, window=3 -> 3 recent",
           len(h["recent_exchanges"]) == 3)
@@ -137,20 +126,17 @@ def test_build_history():
     check("5 exchanges, window=3 -> oldest recent exchange is #3",
           h["recent_exchanges"][0]["user"] == "User question 3")
 
-    # Running summary is passed through when present
     conv = make_conversation(5, running_summary="This is the existing summary.")
     h = build_history(conv, raw_exchanges=3)
     check("running_summary preserved in output",
           h["running_summary"] == "This is the existing summary.")
 
-    # window=1 edge case
     h = build_history(make_conversation(5), raw_exchanges=1)
     check("window=1 -> only 1 recent exchange",
           len(h["recent_exchanges"]) == 1)
     check("window=1 -> that exchange is the last one",
           h["recent_exchanges"][0]["user"] == "User question 5")
 
-    # window=10 with only 3 exchanges — no crash, returns all 3
     h = build_history(make_conversation(3), raw_exchanges=10)
     check("window=10 with 3 exchanges -> 3 recent (no crash)",
           len(h["recent_exchanges"]) == 3)
@@ -172,7 +158,6 @@ def test_build_history_prefix():
     check("empty summary + empty recent -> empty string",
           _build_history_prefix({"running_summary": "", "recent_exchanges": []}) == "")
 
-    # Summary only
     prefix = _build_history_prefix({
         "running_summary": "The user is designing a database.",
         "recent_exchanges": [],
@@ -184,7 +169,6 @@ def test_build_history_prefix():
     check("summary-only -> ends with separator",
           prefix.endswith("---\n\n"))
 
-    # Recent exchanges only
     prefix = _build_history_prefix({
         "running_summary": "",
         "recent_exchanges": [
@@ -200,7 +184,6 @@ def test_build_history_prefix():
     check("recent-only -> does NOT contain CONVERSATION SUMMARY",
           "CONVERSATION SUMMARY" not in prefix)
 
-    # Both summary and recent
     prefix = _build_history_prefix({
         "running_summary": "Running summary here.",
         "recent_exchanges": [{"user": "Q", "chairman": "A"}],
@@ -218,8 +201,6 @@ def test_build_history_prefix():
 def test_summarization_trigger():
     section("Summarization trigger condition (every 5 exchanges)")
 
-    # Mirrors the exact condition in main.py:
-    #   if summ_model and exchange_count > 0 and exchange_count % 5 == 0
     def should_trigger(exchange_count: int, has_summ_model: bool) -> bool:
         return bool(has_summ_model and exchange_count > 0 and exchange_count % 5 == 0)
 
@@ -241,8 +222,6 @@ def test_summarization_trigger():
 def test_exchange_selection():
     section("Exchange selection for compression")
 
-    # Mirrors the logic in council.py run_background_summarization:
-    #   exchanges_to_compress = exchanges[:-raw] if len(exchanges) > raw else []
     def exchanges_to_compress(total: int, raw: int) -> int:
         if total > raw:
             return total - raw
@@ -254,8 +233,6 @@ def test_exchange_selection():
     check("10 total, raw=3 -> 7 compressed", exchanges_to_compress(10, 3) == 7)
     check("10 total, raw=1 -> 9 compressed", exchanges_to_compress(10, 1) == 9)
 
-    # Confirm the correct exchanges are selected (indices)
-    # At 5 exchanges with raw=3: compress [0,1], keep [2,3,4]
     all_ex = [{"user": f"Q{i}", "chairman": f"A{i}"} for i in range(5)]
     raw = 3
     to_compress = all_ex[:-raw] if len(all_ex) > raw else []
@@ -267,7 +244,7 @@ def test_exchange_selection():
 
 
 # ---------------------------------------------------------------------------
-# Tests: run_background_summarization — no-op paths (no API call made)
+# Tests: run_background_summarization — no-op paths
 # ---------------------------------------------------------------------------
 
 async def test_summarization_noop_paths():
@@ -281,10 +258,7 @@ async def test_summarization_noop_paths():
         "display_name": "Fake",
     }
 
-    # 0 exchanges — should return early without calling the model
     conv_empty = make_conversation(0)
-    # This will fail to connect (fake URL) but should catch the exception silently
-    # We just verify it doesn't raise
     raised = False
     try:
         await run_background_summarization("test-id", conv_empty, fake_model, raw_exchanges_to_keep=3)
@@ -292,7 +266,6 @@ async def test_summarization_noop_paths():
         raised = True
     check("0 exchanges -> returns silently (no raise)", not raised)
 
-    # 3 exchanges with raw=5 -> nothing to compress -> returns early (no HTTP call)
     conv_short = make_conversation(3)
     raised = False
     try:
@@ -301,7 +274,6 @@ async def test_summarization_noop_paths():
         raised = True
     check("3 exchanges, raw=5 -> returns early silently (no raise)", not raised)
 
-    # 5 exchanges with raw=3 -> 2 to compress -> WILL try HTTP (will fail gracefully)
     conv_trigger = make_conversation(5)
     raised = False
     try:

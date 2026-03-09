@@ -81,7 +81,7 @@ cd llm-council
 
 **Install Python dependencies:**
 ```bash
-pip install httpx fastapi uvicorn
+pip install httpx fastapi uvicorn cryptography bcrypt slowapi PyJWT
 ```
 
 **Install frontend dependencies:**
@@ -117,10 +117,18 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
-## First Run: The Setup Wizard
+## First Run: Password & Setup Wizard
 
-The first time you open the app, the Settings panel opens automatically in wizard mode.
-The wizard walks you through adding your models step by step.
+The first time you open the app, you'll be asked to set a password. This password:
+
+- Protects your instance from unauthorized access
+- Encrypts all your stored API keys on disk
+
+Choose something you'll remember — if you lose it, there's no reset mechanism. Your
+API keys would need to be re-entered.
+
+After setting a password, the Settings wizard opens automatically and walks you through
+adding your models step by step.
 
 **Step 1 — Add your first model.** Fill in:
 - *Display name* — whatever you want to call it (e.g. "GPT-4o")
@@ -178,20 +186,100 @@ to verify a model is reachable before using it in a council.
 "Raw exchanges to keep" sets how many recent back-and-forth messages are sent
 in full. Older messages are compressed into a summary automatically.
 
+**Security tab** — Change your password. When you change it, all stored API keys
+are automatically re-encrypted.
+
 ---
 
-## Keeping Your API Keys Safe
+## Security
 
-Your API keys are stored in `data/council_config.json` on your computer. This file
-is excluded from Git — it will never be accidentally uploaded if you push the code
-somewhere. The example file `data/council_config.example.json` shows the structure
-but contains no real keys.
+### What the password protects
 
-The app never sends your API keys back to the browser. If you open the browser's
-developer tools and inspect network responses, you will see keys either masked
-(`sk-or-abc...`) or blank — never the full key.
+- **Unauthorized access** — all API endpoints require a valid session. Without your
+  password, nobody can use your council or see your conversations.
+- **API key exposure** — your API keys are encrypted at rest using a key derived from
+  your password. The raw keys never touch disk after initial setup.
 
-**Do not share your `data/council_config.json` file with anyone.**
+### What it does NOT protect
+
+- **Physical file access** — someone with direct access to your computer can read the
+  encrypted config file. The encryption protects against casual exposure (e.g., if the
+  file is accidentally copied or shared), not a determined attacker with full disk access.
+
+### Important files in `data/`
+
+| File | What it is | What happens if deleted |
+|---|---|---|
+| `council_config.json` | Your encrypted config + API keys | All settings lost; re-run setup |
+| `.salt` | Encryption salt for PBKDF2 key derivation | **All stored API keys become permanently unrecoverable** |
+| `.secret` | JWT signing secret | All active sessions invalidated (re-login required) |
+| `conversations/` | Your conversation history | Conversations lost |
+
+**Never delete `data/.salt`** unless you're intentionally starting from scratch. If it's
+lost, you'll need to re-enter all your API keys.
+
+All files in `data/` are excluded from Git and will never be accidentally committed.
+
+### Network security
+
+**Never expose port 8001 to the public internet** without additional protection
+(VPN, reverse proxy with TLS, etc.). LLM Council is designed for local or LAN use.
+The default configuration only allows connections from localhost.
+
+### Changing your password
+
+Go to Settings (gear icon) → Security tab. Enter your current password and your new
+password. All stored API keys are automatically re-encrypted with the new password.
+
+### Rate limiting
+
+The app rate-limits requests to prevent abuse:
+- Chat messages: 10 per minute
+- Other API calls: 20 per minute
+- Login attempts: 5 per minute (locked out for 15 minutes after 5 failures)
+
+---
+
+## Running Tests
+
+The test suite runs without API keys or a running server — it tests pure logic only.
+
+**On Mac/Linux:**
+```bash
+./run_tests.sh
+```
+
+**On Windows (PowerShell):**
+```powershell
+powershell -ExecutionPolicy Bypass -File run_tests.ps1
+```
+
+**Or run individual suites:**
+```bash
+python -m tests.test_pipeline    # History, summarization, exchange logic (47 tests)
+python -m tests.test_config      # Config loading, encryption, schema validation (30 tests)
+python -m tests.test_ranking     # Ranking parse logic — well-formed, malformed, edge cases (24 tests)
+```
+
+---
+
+## LAN Access
+
+By default, LLM Council only accepts connections from `localhost`. To access it from
+other devices on your local network (e.g., a phone or another computer), set the
+`ALLOWED_ORIGINS` environment variable before starting the backend:
+
+```bash
+ALLOWED_ORIGINS="http://localhost:5173,http://192.168.1.100:5173" python -m backend.main
+```
+
+Replace `192.168.1.100` with your computer's LAN IP address. When any origin hostname
+is not `localhost`, `127.0.0.1`, or `::1`, the backend automatically binds to `0.0.0.0`
+(all network interfaces) instead of localhost only.
+
+**Important:** Never expose the backend to the public internet without additional
+protection (VPN, reverse proxy with TLS, firewall rules). LLM Council is designed
+for local and trusted-LAN use only.
 
 ---
 
@@ -241,3 +329,31 @@ The backend isn't running. Start it with `python -m backend.main` and refresh.
 Based on the original [llm-council](https://github.com/karpathy/llm-council) concept by
 Andrej Karpathy. This fork adds a full settings UI, multi-source model support, RunPod
 integration, conversation history with background summarization, and a first-run wizard.
+
+---
+
+## Changelog
+
+### v1.1.0 — Bug Fixes & Reliability
+
+- **CORS/bind address fix** — New `ALLOWED_ORIGINS` env var controls both CORS and
+  server bind address. Prevents mismatch where CORS allows a LAN origin but the server
+  only listens on localhost.
+- **start.sh race condition fix** — Backend startup now polls `/api/health` instead of
+  using a fixed `sleep 2`, so the frontend won't launch before the backend is ready.
+- **Config schema validation** — `POST /api/config` now validates with Pydantic before
+  saving. Invalid cross-references (orphaned chairman, bad favorites) are rejected with
+  clear error messages.
+- **Ranking parse warning** — When a model doesn't follow the expected FINAL RANKING
+  format, an amber ⚠ icon appears next to its ranking tab in Stage 2.
+- **Test suite** — 101 tests across 3 suites (pipeline, config, ranking). No API keys
+  needed. Run with `./run_tests.sh` or `run_tests.ps1`.
+
+### v1.0.0 — Initial Release
+
+- Full settings UI with first-run wizard
+- Multi-source model support (OpenRouter, RunPod, Local/Ollama, Custom)
+- Password authentication with API key encryption at rest
+- Conversation history with background summarization
+- Rate limiting and input validation
+- RunPod wake-up button with endpoint health checking
