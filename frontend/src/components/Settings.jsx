@@ -10,6 +10,7 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import { stripProviderPrefix } from '../utils/costEstimate';
 import './Settings.css';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -499,7 +500,7 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
             ) : (
               <div key={m.id} className="wizard-model-item">
                 <SourceBadge baseUrl={m.base_url} />
-                <span className="model-display-name">{m.display_name}</span>
+                <span className="model-display-name">{stripProviderPrefix(m.display_name)}</span>
                 <span className="model-id-small">{m.model}</span>
                 <div className="model-item-actions">
                   <button
@@ -570,7 +571,7 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
             <option value="">— Select a model —</option>
             {wizardModels.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.display_name}
+                {stripProviderPrefix(m.display_name)}
               </option>
             ))}
           </select>
@@ -609,7 +610,7 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
             <option value="">— Select a model —</option>
             {wizardModels.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.display_name}
+                {stripProviderPrefix(m.display_name)}
               </option>
             ))}
           </select>
@@ -647,11 +648,11 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
         <ul className="wizard-summary">
           <li>
             Chairman:{' '}
-            <strong>{chairmanModel?.display_name ?? '—'}</strong>
+            <strong>{chairmanModel ? stripProviderPrefix(chairmanModel.display_name) : '—'}</strong>
           </li>
           <li>
             Summarization:{' '}
-            <strong>{sumModel?.display_name ?? '—'}</strong>
+            <strong>{sumModel ? stripProviderPrefix(sumModel.display_name) : '—'}</strong>
           </li>
         </ul>
         <p>
@@ -767,14 +768,14 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
             <div key={m.id} className="model-list-item">
               <div className="model-list-info">
                 <SourceBadge baseUrl={m.base_url} />
-                <span className="model-list-name">{m.display_name}</span>
+                <span className="model-list-name">{stripProviderPrefix(m.display_name)}</span>
                 <span className="model-list-id">{m.model}</span>
               </div>
               <div className="model-list-actions">
                 <button
                   className="btn-icon"
                   onClick={() => {
-                    setEditingModel(m);
+                    setEditingModel({...m, display_name: stripProviderPrefix(m.display_name)});
                     setShowModelForm(true);
                   }}
                 >
@@ -812,7 +813,7 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
             <option value="">— Select a model —</option>
             {models.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.display_name}
+                {stripProviderPrefix(m.display_name)}
               </option>
             ))}
           </select>
@@ -846,7 +847,7 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
                       }}
                     />
                     <SourceBadge baseUrl={m.base_url} />
-                    <span>{m.display_name}</span>
+                    <span>{stripProviderPrefix(m.display_name)}</span>
                   </label>
                 );
               })}
@@ -914,7 +915,7 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
             <option value="">— Select a model —</option>
             {models.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.display_name}
+                {stripProviderPrefix(m.display_name)}
               </option>
             ))}
           </select>

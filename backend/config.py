@@ -106,14 +106,24 @@ def _encrypt_api_key(plaintext: str, fernet_key: bytes) -> str:
 
 
 def _decrypt_api_key(ciphertext: str, fernet_key: bytes) -> str:
-    """Decrypt an encrypted API key. Returns empty string for empty values."""
+    """Decrypt an encrypted API key. Returns empty string for empty values.
+
+    If the stored value is not a valid Fernet token (e.g. plaintext from a
+    pre-encryption save or a save_config call when _fernet_key was None),
+    it is returned as-is so that API calls still work.
+    """
     if not ciphertext:
         return ""
     try:
         f = Fernet(fernet_key)
         return f.decrypt(ciphertext.encode("utf-8")).decode("utf-8")
-    except (InvalidToken, Exception) as e:
-        print(f"Warning: could not decrypt API key ({e}). Returning empty.")
+    except (InvalidToken, Exception):
+        # Fernet tokens always start with "gAAA" (base64 of version byte 0x80).
+        # If the value doesn't look like a Fernet token, it's likely a plaintext
+        # key stored before encryption was enabled — return it as-is.
+        if not ciphertext.startswith("gAAA"):
+            return ciphertext
+        print("Warning: could not decrypt API key (invalid Fernet token). Returning empty.")
         return ""
 
 

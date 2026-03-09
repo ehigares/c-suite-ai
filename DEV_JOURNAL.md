@@ -7,8 +7,8 @@ every sprint and whenever a significant decision or problem is encountered.
 
 ## Project Status
 
-**Current Sprint:** Sprint 9.5 — Rebrand + Critical Bug Fixes
-**Overall Status:** 🟢 Sprint 9.5 complete
+**Current Sprint:** Sprint 9.5 Hotfix — API Key Decryption + Provider Prefix Cleanup
+**Overall Status:** 🟢 Hotfix complete (v1.2.2)
 
 ---
 
@@ -458,6 +458,36 @@ Test E — WakeUpButton:
 | 2026-03-09 | 9.5 | Masked keys preserved in save_config | Detecting "..." suffix prevents frontend masked keys from corrupting stored encrypted keys |
 | 2026-03-09 | 9.5 | Auth check via minimal chat completion | GET /models is public on OpenRouter; a POST with max_tokens=1 reliably detects invalid keys |
 | 2026-03-09 | 9.5 | Per-conversation chairman/summarization | Stored in council snapshot alongside council_model_ids; global config used as fallback |
+| 2026-03-09 | 9.5 hotfix | Council snapshots no longer store API keys | Keys refreshed from global config at query time via `_refresh_council_api_keys()` — more secure and prevents stale/corrupt key issues |
+| 2026-03-09 | 9.5 hotfix | Auth middleware forces re-login when Fernet key unavailable | Prevents the bad state where JWT is valid but API keys can't be decrypted |
+
+---
+
+### Sprint 9.5 Hotfix — API Key Decryption + Provider Prefix Cleanup
+**Status:** ✅ Complete
+**Goal:** Fix API key corruption after server restart, clean up provider prefix display everywhere.
+
+**Root Cause Analysis (Bug 1):**
+The API key bug had multiple contributing factors:
+1. After server restart, the JWT could still be valid (signed with persistent secret in data/.secret), but `_fernet_key` was None. This allowed authenticated requests where `load_config()` couldn't decrypt keys — returning empty strings or encrypted values.
+2. Conversation snapshots stored plaintext API keys at creation time. If created during a bad state (Fernet key unavailable), the snapshot contained encrypted/garbled keys that were then used directly in API calls.
+3. `_decrypt_api_key()` silently returned "" on any failure, even when the stored value was plaintext (not a Fernet token), making it impossible to tell what went wrong.
+
+**Fixes Applied:**
+- [x] Auth middleware: force re-login (401) when `_fernet_key` is None, even if JWT is valid
+- [x] `_decrypt_api_key()`: detect plaintext values (non-Fernet tokens) and return them as-is instead of empty string
+- [x] `_refresh_council_api_keys()`: streaming/message endpoints now refresh API keys from current global config instead of using snapshot keys
+- [x] `create_conversation`: API keys stripped from council snapshot before storage (security + correctness)
+- [x] Stage3.jsx: use `stripProviderPrefix()` instead of `.split('/')` for chairman label
+- [x] Stage1.jsx: use `stripProviderPrefix()` for model tabs and names
+- [x] Stage2.jsx: use `stripProviderPrefix()` for all model name displays and de-anonymization
+- [x] Settings.jsx: apply `stripProviderPrefix()` to all display_name renders (model list, edit form, wizard, dropdowns, favorites)
+
+**Verification Checklist:**
+- [x] All 110 tests pass (pipeline 47, config 39, ranking 24)
+- [x] Frontend build clean: 213 modules, 0 errors, 0 warnings
+- [x] All backend imports clean
+- [ ] Full end-to-end verification — requires live backend with API keys
 
 ---
 
@@ -471,3 +501,4 @@ Test E — WakeUpButton:
 | 2026-03-09 | 9.5 | API keys corrupted after server restart — all models return 401 | `save_config()` was re-encrypting masked keys from frontend. Fix: detect masked keys and preserve original encrypted values from disk |
 | 2026-03-09 | 9.5 | ChatInterface blank page when clicking conversations | `useMemo` was after early return — violated React hooks rules. Fix: move all hooks above conditional returns |
 | 2026-03-09 | 9.5 | Test Connection showed Connected even with wrong API key | `check_endpoint_health` only called GET /models (public endpoint). Fix: added minimal POST /chat/completions check to verify auth |
+| 2026-03-09 | 9.5 hotfix | API keys still 401 after restart despite disk values being correct | Multiple causes: (1) JWT valid after restart but Fernet key cleared — auth middleware didn't enforce re-login; (2) Conversation snapshots stored API keys that could become stale; (3) `_decrypt_api_key()` returned "" for plaintext values. Fix: force re-login when Fernet key unavailable, refresh keys from global config at query time, handle plaintext fallback in decrypt |

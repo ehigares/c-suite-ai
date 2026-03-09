@@ -25,6 +25,7 @@ from .config import (
     get_chairman,
     get_models_by_ids,
     get_summarization_model,
+    get_fernet_key,
     is_password_set,
     set_initial_password,
     change_password,
@@ -204,6 +205,15 @@ async def auth_middleware(request: Request, call_next):
 
     token = auth_header[7:]  # Strip "Bearer "
     if not validate_session_token(token):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Session expired. Please log in again."},
+        )
+
+    # After a server restart the JWT may still be valid (signed with the
+    # persistent secret), but the Fernet key for decrypting API keys is
+    # cleared from memory.  Force re-login so the key is re-derived.
+    if get_fernet_key() is None:
         return JSONResponse(
             status_code=401,
             content={"detail": "Session expired. Please log in again."},
@@ -481,6 +491,21 @@ def _strip_council_keys(conversation: Dict[str, Any]) -> Dict[str, Any]:
     return conv
 
 
+def _refresh_council_api_keys(council_config: Dict[str, Any], global_config: Dict[str, Any]):
+    """
+    Replace API keys in a conversation's council_config snapshot with
+    current decrypted keys from the global config.
+
+    Conversation snapshots intentionally store empty API keys (for security).
+    This function fills them in from the live config before making API calls,
+    ensuring the correct decrypted key is always used.
+    """
+    global_keys = {m["id"]: m.get("api_key", "") for m in global_config.get("available_models", [])}
+    for model in council_config.get("available_models", []):
+        if model["id"] in global_keys:
+            model["api_key"] = global_keys[model["id"]]
+
+
 @app.get("/api/config")
 async def get_config():
     """Return the current council config with API keys masked."""
@@ -660,9 +685,17 @@ async def create_conversation(request: Request, body: CreateConversationRequest)
     # Use per-conversation summarization model if provided, otherwise fall back to global
     summarization_id = body.summarization_model_id or config.get("summarization_model_id")
 
-    # Build the locked council snapshot stored with the conversation
+    # Build the locked council snapshot stored with the conversation.
+    # API keys are NOT stored in the snapshot for security — they are
+    # refreshed from the current global config at query time via
+    # _refresh_council_api_keys().
+    import copy
+    snapshot_models = copy.deepcopy(selected_models)
+    for m in snapshot_models:
+        m["api_key"] = ""
+
     council_snapshot = {
-        "available_models": selected_models,
+        "available_models": snapshot_models,
         "chairman_id": chairman_id,
         "summarization_model_id": summarization_id,
         "council_model_ids": body.council_model_ids,
@@ -706,9 +739,12 @@ async def send_message(request: Request, conversation_id: str, body: SendMessage
 
     council_config = conversation.get("council_config", {})
 
-    # Load global config to get user's raw-exchanges setting
+    # Load global config to get user's raw-exchanges setting and fresh API keys
     global_config = load_config()
     raw_exchanges = global_config.get("history_raw_exchanges", 3)
+
+    # Refresh API keys from current global config (snapshot stores empty keys)
+    _refresh_council_api_keys(council_config, global_config)
 
     # Build history for this request (summary + recent raw exchanges)
     history = storage.build_history(conversation, raw_exchanges)
@@ -765,9 +801,12 @@ async def send_message_stream(request: Request, conversation_id: str, body: Send
     is_first_message = len(conversation["messages"]) == 0
     council_config = conversation.get("council_config", {})
 
-    # Load global config once — used for history window and summarization model
+    # Load global config once — used for history window, summarization, and fresh API keys
     global_config = load_config()
     raw_exchanges = global_config.get("history_raw_exchanges", 3)
+
+    # Refresh API keys from current global config (snapshot stores empty keys)
+    _refresh_council_api_keys(council_config, global_config)
 
     async def event_generator():
         try:
