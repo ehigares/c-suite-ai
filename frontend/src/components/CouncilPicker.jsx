@@ -14,6 +14,7 @@
 
 import { useState, useMemo } from 'react';
 import { SourceBadge } from './Settings';
+import { calculateApiCalls } from '../utils/costEstimate';
 import './CouncilPicker.css';
 
 export default function CouncilPicker({
@@ -185,6 +186,14 @@ export default function CouncilPicker({
                 {w.type === 'yellow' ? '⚠' : 'ℹ'} {w.text}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Cost hint */}
+        {selectedCount >= 2 && (
+          <div className="picker-cost-hint">
+            This council will make {calculateApiCalls(selectedCount)} API calls per question
+            ({selectedCount} models × 2 stages + chairman)
           </div>
         )}
 

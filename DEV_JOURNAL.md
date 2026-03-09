@@ -7,8 +7,8 @@ every sprint and whenever a significant decision or problem is encountered.
 
 ## Project Status
 
-**Current Sprint:** Sprint 8 — Bug Fixes & Reliability
-**Overall Status:** 🟢 Sprint 8 complete
+**Current Sprint:** Sprint 9 — Security Polish & Cost Visibility
+**Overall Status:** 🟢 Sprint 9 complete
 
 ---
 
@@ -367,6 +367,41 @@ Test E — WakeUpButton:
 
 ---
 
+### Sprint 9 — Security Polish & Cost Visibility
+**Status:** ✅ Complete
+**Goal:** Raise password minimum, persist login lockout, add cost visibility for API calls and tokens.
+
+**Tasks:**
+- [x] Raise minimum password length from 4 to 8 characters (backend + frontend)
+- [x] Add `password_too_short` flag to login response for existing short-password users
+- [x] Show non-blocking banner when password is below new minimum
+- [x] Persist login lockout to `data/.lockout` (JSON, atomic writes)
+- [x] Clear lockout on successful login and on expiry
+- [x] Add `data/.lockout` to `.gitignore`
+- [x] Create `frontend/src/utils/costEstimate.js` — API call count + token estimate utilities
+- [x] Add cost hint to CouncilPicker (live API call count as models selected)
+- [x] Add cost hint to ChatInterface header (API calls + debounced token estimate)
+- [x] Update README with 8-char minimum, v1.2.0 changelog
+- [x] Add 9 new tests: password length (6), lockout persistence (9) — total 110 tests
+- [x] Tag v1.2.0
+
+**Verification Checklist:**
+- [x] All 3 test suites pass: pipeline (47), config (39), ranking (24) — 110 total
+- [x] Frontend build clean: 211 modules, 0 errors, 0 warnings
+- [x] Password minimum enforced in setup, login, and change flows
+- [x] Lockout survives restart, clears on success, clears on expiry
+- [x] Cost hint updates live in CouncilPicker and ChatInterface
+- [x] Token estimate debounced (300ms) in ChatInterface
+
+**Notes:**
+- Password minimum change is non-breaking for existing users: `login_and_cache_key()` in config.py doesn't check length (only verifies bcrypt hash), so existing users with short passwords can still log in. The backend returns `password_too_short: true` from `/api/login` when the password validates but is under 8 chars.
+- The frontend shows a non-blocking banner ("Your password is shorter than the new 8-character minimum…") via the existing warning system in App.jsx, directing users to Settings → Security. The banner clears when config is saved (assumed password was changed).
+- Lockout is now IP-agnostic (single lockout state vs. per-IP tracking). Acceptable for single-user self-hosted app — simplifies the persistence model.
+- `os.replace()` is used for atomic writes on both Windows and POSIX.
+- Cost estimate uses the standard ~4 chars/token approximation plus a fixed 200-token system prompt estimate.
+
+---
+
 ## Decisions Made During Build
 
 *(Claude Code logs any decisions made during implementation that weren't in the original spec)*
@@ -381,6 +416,9 @@ Test E — WakeUpButton:
 | 2026-03-08 | 8 | Custom test framework instead of pytest | Keeps dependencies minimal for self-hosting non-technical users; no extra install needed |
 | 2026-03-08 | 8 | ALLOWED_ORIGINS controls both CORS and bind address | Single env var prevents mismatch where CORS allows an origin but uvicorn isn't listening on the right interface |
 | 2026-03-08 | 8 | parse_ranking_from_text returns tuple | Adding fallback flag as second return value is cleaner than a separate function; only 2 callers to update |
+| 2026-03-08 | 9 | Password too short = non-blocking banner | Avoids locking out existing users; they can still use the app while being prompted to update |
+| 2026-03-08 | 9 | Lockout is IP-agnostic (single state file) | Single-user app; per-IP tracking unnecessary and complicates disk persistence |
+| 2026-03-08 | 9 | No dollar-amount cost display | Pricing varies too much across providers; API call count and token estimate are always accurate |
 
 ---
 

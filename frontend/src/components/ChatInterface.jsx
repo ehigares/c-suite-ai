@@ -5,6 +5,7 @@ import Stage2 from './Stage2';
 import Stage3 from './Stage3';
 import WakeUpButton from './WakeUpButton';
 import { SourceBadge } from './Settings';
+import { calculateApiCalls, estimateInputTokens, formatCostHint } from '../utils/costEstimate';
 import './ChatInterface.css';
 
 export default function ChatInterface({
@@ -14,6 +15,8 @@ export default function ChatInterface({
   warnings,
 }) {
   const [input, setInput] = useState('');
+  const [debouncedTokens, setDebouncedTokens] = useState(0);
+  const debounceRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -23,6 +26,15 @@ export default function ChatInterface({
   useEffect(() => {
     scrollToBottom();
   }, [conversation]);
+
+  // Debounced token estimate — updates 300ms after user stops typing
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedTokens(input.trim() ? estimateInputTokens(input) : 0);
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [input]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -101,6 +113,13 @@ export default function ChatInterface({
             ))}
           </div>
           <WakeUpButton councilModels={councilModels} />
+        </div>
+      )}
+
+      {/* Cost hint — subtle line below council header */}
+      {councilModels.length > 0 && (
+        <div className="cost-hint">
+          {formatCostHint(calculateApiCalls(councilModels.length), debouncedTokens)}
         </div>
       )}
 

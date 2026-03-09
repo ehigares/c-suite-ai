@@ -41,7 +41,7 @@ function LoginScreen({ onAuthenticated }) {
 
     try {
       const result = await api.login(password);
-      onAuthenticated(result.token);
+      onAuthenticated(result.token, { passwordTooShort: result.password_too_short });
     } catch (err) {
       setError(err.message || 'Login failed.');
     } finally {
@@ -53,8 +53,8 @@ function LoginScreen({ onAuthenticated }) {
     e.preventDefault();
     setError('');
 
-    if (password.length < 4) {
-      setError('Password must be at least 4 characters.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
       return;
     }
 

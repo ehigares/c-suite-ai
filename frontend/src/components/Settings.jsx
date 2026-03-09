@@ -928,8 +928,8 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
       e.preventDefault();
       setPasswordStatus(null);
 
-      if (newPassword.length < 4) {
-        setPasswordStatus('New password must be at least 4 characters.');
+      if (newPassword.length < 8) {
+        setPasswordStatus('New password must be at least 8 characters.');
         return;
       }
       if (newPassword !== confirmNewPassword) {

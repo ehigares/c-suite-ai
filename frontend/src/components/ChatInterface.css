@@ -53,6 +53,17 @@
   line-height: 1;
 }
 
+/* ── Cost hint — subtle info below council header ────────────────────────── */
+
+.cost-hint {
+  padding: 4px 20px 6px;
+  font-size: 11px;
+  color: #999;
+  background: #f8f8f8;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
 /* ── Warning banners — shown above the message area when config issues exist */
 .warning-banners {
   flex-shrink: 0;

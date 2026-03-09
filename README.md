@@ -124,8 +124,8 @@ The first time you open the app, you'll be asked to set a password. This passwor
 - Protects your instance from unauthorized access
 - Encrypts all your stored API keys on disk
 
-Choose something you'll remember — if you lose it, there's no reset mechanism. Your
-API keys would need to be re-entered.
+Your password must be at least 8 characters. Choose something you'll remember — if you
+lose it, there's no reset mechanism. Your API keys would need to be re-entered.
 
 After setting a password, the Settings wizard opens automatically and walks you through
 adding your models step by step.
@@ -333,6 +333,16 @@ integration, conversation history with background summarization, and a first-run
 ---
 
 ## Changelog
+
+### v1.2.0 — Security Polish & Cost Visibility
+
+- **Minimum password length raised to 8 characters** — existing users with shorter
+  passwords see a non-blocking banner prompting them to update.
+- **Login lockout persists across server restarts** — lockout state is now written
+  to `data/.lockout` instead of stored in memory.
+- **Cost visibility** — the council picker and conversation header now show how many
+  API calls each question will make and a rough input token estimate that updates
+  as you type.
 
 ### v1.1.0 — Bug Fixes & Reliability
 

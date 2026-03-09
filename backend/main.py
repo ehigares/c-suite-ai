@@ -99,31 +99,69 @@ app.add_middleware(
 
 
 # ---------------------------------------------------------------------------
-# Login lockout tracking (in-memory, resets on server restart)
+# Login lockout tracking (persisted to data/.lockout)
 # ---------------------------------------------------------------------------
 
-_login_attempts: Dict[str, List[float]] = {}
 _LOGIN_MAX_ATTEMPTS = 5
 _LOGIN_LOCKOUT_SECONDS = 15 * 60  # 15 minutes
+_LOCKOUT_PATH = os.path.join("data", ".lockout")
+
+
+def _load_lockout() -> dict:
+    """Load lockout state from disk. Returns defaults if file doesn't exist."""
+    try:
+        with open(_LOCKOUT_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {"locked_until": None, "failed_attempts": 0, "last_attempt": None}
+
+
+def _save_lockout(state: dict):
+    """Write lockout state to disk atomically (temp file + rename)."""
+    os.makedirs("data", exist_ok=True)
+    tmp_path = _LOCKOUT_PATH + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(state, f)
+    os.replace(tmp_path, _LOCKOUT_PATH)
+
+
+def _clear_lockout():
+    """Remove lockout state from both memory and disk."""
+    try:
+        os.remove(_LOCKOUT_PATH)
+    except FileNotFoundError:
+        pass
 
 
 def _check_login_lockout(ip: str) -> Optional[str]:
-    """Return an error message if the IP is locked out, else None."""
-    attempts = _login_attempts.get(ip, [])
+    """Return an error message if locked out, else None."""
+    state = _load_lockout()
     now = time.time()
-    # Only count attempts within the lockout window
-    recent = [t for t in attempts if now - t < _LOGIN_LOCKOUT_SECONDS]
-    _login_attempts[ip] = recent
-    if len(recent) >= _LOGIN_MAX_ATTEMPTS:
-        remaining = int(_LOGIN_LOCKOUT_SECONDS - (now - recent[0]))
-        minutes = max(1, remaining // 60)
-        return f"Too many failed login attempts. Try again in {minutes} minute(s)."
+
+    locked_until = state.get("locked_until")
+    if locked_until is not None:
+        if now < locked_until:
+            remaining = int(locked_until - now)
+            minutes = max(1, remaining // 60)
+            return f"Too many failed login attempts. Try again in {minutes} minute(s)."
+        else:
+            # Lockout has expired — clear it
+            _clear_lockout()
     return None
 
 
 def _record_failed_login(ip: str):
-    """Record a failed login attempt for rate limiting."""
-    _login_attempts.setdefault(ip, []).append(time.time())
+    """Record a failed login attempt. Sets lockout if threshold reached."""
+    state = _load_lockout()
+    now = time.time()
+
+    state["failed_attempts"] = state.get("failed_attempts", 0) + 1
+    state["last_attempt"] = now
+
+    if state["failed_attempts"] >= _LOGIN_MAX_ATTEMPTS:
+        state["locked_until"] = now + _LOGIN_LOCKOUT_SECONDS
+
+    _save_lockout(state)
 
 
 # ---------------------------------------------------------------------------
@@ -366,8 +404,13 @@ async def login(request: Request, body: LoginRequest):
         _record_failed_login(ip)
         raise HTTPException(status_code=401, detail="Incorrect password.")
 
+    # Clear lockout on successful login
+    _clear_lockout()
+
     token = create_session_token()
-    return {"token": token}
+    # Flag if existing password is shorter than current minimum (8 chars)
+    password_too_short = len(body.password) < 8
+    return {"token": token, "password_too_short": password_too_short}
 
 
 @app.post("/api/setup-password")
@@ -379,8 +422,8 @@ async def setup_password(body: SetPasswordRequest):
     if is_password_set():
         raise HTTPException(status_code=400, detail="Password already set. Use the change password flow.")
 
-    if len(body.password) < 4:
-        raise HTTPException(status_code=422, detail="Password must be at least 4 characters.")
+    if len(body.password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
 
     set_initial_password(body.password)
     token = create_session_token()
@@ -390,8 +433,8 @@ async def setup_password(body: SetPasswordRequest):
 @app.post("/api/change-password")
 async def change_password_endpoint(body: ChangePasswordRequest):
     """Change the password. Re-encrypts all stored API keys."""
-    if len(body.new_password) < 4:
-        raise HTTPException(status_code=422, detail="New password must be at least 4 characters.")
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=422, detail="New password must be at least 8 characters.")
 
     if not change_password(body.old_password, body.new_password):
         raise HTTPException(status_code=401, detail="Current password is incorrect.")

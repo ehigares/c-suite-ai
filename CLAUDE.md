@@ -186,7 +186,7 @@ codebase. Read this section before touching any auth, config, or API code.
   header EXCEPT: GET / (frontend), POST /api/login, GET /api/health
 - Tokens are issued by POST /api/login, signed with a secret stored in
   data/.secret, and expire after 24 hours of inactivity
-- Failed logins are rate-limited: 5 attempts then 15-minute lockout
+- Failed logins are rate-limited: 5 attempts then 15-minute lockout (persisted to disk)
 - The frontend stores the token in sessionStorage (clears on tab close)
 - LoginScreen.jsx is shown when no valid token exists
 
@@ -202,6 +202,7 @@ codebase. Read this section before touching any auth, config, or API code.
 - data/council_config.json — contains encrypted API keys
 - data/.salt — encryption salt, loss = permanent key loss
 - data/.secret — JWT signing secret
+- data/.lockout — login lockout state (persists across restarts)
 - data/conversations/ — user conversation data
 
 ### Rate Limiting

@@ -82,9 +82,15 @@ function App() {
     }
   }, [currentConversationId, isAuthenticated]);
 
-  const handleAuthenticated = (token) => {
+  // Track whether the user's existing password is too short (< 8 chars)
+  const [passwordTooShort, setPasswordTooShort] = useState(false);
+
+  const handleAuthenticated = (token, meta = {}) => {
     setToken(token);
     setIsAuthenticated(true);
+    if (meta.passwordTooShort) {
+      setPasswordTooShort(true);
+    }
   };
 
   const loadConversations = async () => {
@@ -141,6 +147,22 @@ function App() {
     return warnings;
   }, [councilConfig]);
 
+  // Non-blocking informational warnings (shown but don't prevent new conversations)
+  const infoWarnings = useMemo(() => {
+    const w = [];
+    if (passwordTooShort) {
+      w.push(
+        'Your password is shorter than the new 8-character minimum. Please update it in Settings → Security.'
+      );
+    }
+    return w;
+  }, [passwordTooShort]);
+
+  const allWarnings = useMemo(
+    () => [...blockingWarnings, ...infoWarnings],
+    [blockingWarnings, infoWarnings]
+  );
+
   const isNewConversationBlocked = blockingWarnings.length > 0;
   const blockReason = isNewConversationBlocked
     ? 'Fix the warnings shown in the chat area before starting a new conversation.'
@@ -165,6 +187,8 @@ function App() {
 
   const handleConfigSaved = () => {
     loadCouncilConfig();
+    // If user changed their password in Settings, clear the too-short warning
+    setPasswordTooShort(false);
   };
 
   // ── Conversation handlers ───────────────────────────────────────────────
@@ -344,7 +368,7 @@ function App() {
           conversation={currentConversation}
           onSendMessage={handleSendMessage}
           isLoading={isLoading}
-          warnings={blockingWarnings}
+          warnings={allWarnings}
         />
       )}
 

@@ -19,6 +19,7 @@ data/conversations/
 # Security-sensitive files — never commit these
 data/.salt
 data/.secret
+data/.lockout
 
 # Frontend
 frontend/node_modules/
