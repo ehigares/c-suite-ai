@@ -230,3 +230,37 @@ codebase. Read this section before touching any auth, config, or API code.
 - Never skip input validation "just for testing"
 - Always validate config schema before writing to disk
 - Rate limit decorators must stay on all public endpoints
+---
+
+## Sprint 9 Additions (added 2026-03-08)
+
+### Password Policy
+- Minimum password length is 8 characters — enforce in both backend
+  validation AND frontend form
+- If a user has a pre-existing password shorter than 8 chars, prompt
+  them to update on next login — never silently block them
+- Password change flow must also enforce the 8-char minimum
+
+### Login Lockout Persistence
+- Lockout state is persisted to data/.lockout (JSON file)
+- Structure: { "locked_until": <ISO or null>, "failed_attempts": <int>,
+  "last_attempt": <ISO timestamp> }
+- On server start: load lockout state from disk
+- On failed login: write state atomically (temp file + rename)
+- On successful login or expiry: clear both memory and disk state
+- data/.lockout is gitignored — never commit it
+- Do NOT reset lockout just because the server restarted
+
+### Cost Visibility Rules
+- Never show dollar amounts — pricing is too variable and changes often
+- Show API call count: formula is (council_size × 2) + 1
+- Show rough token estimate: len(message) / 4 + ~200 system prompt tokens
+- Always label estimates as approximate ("~X tokens estimated")
+- Cost hints are informational only — never block or warn aggressively
+- Keep display subtle: gray text, small font
+- Token estimate in ChatInterface must be debounced (300ms)
+- All cost logic lives in frontend/src/utils/costEstimate.js
+  (calculateApiCalls, estimateInputTokens, formatCostHint)
+
+### New Sensitive File
+- data/.lockout — added to .gitignore, documents in README

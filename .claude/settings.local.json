@@ -10,7 +10,10 @@
       "Bash(C:/Users/ehiga/AppData/Local/Programs/Python/Python312-arm64/python.exe:*)",
       "Bash(npm run:*)",
       "Bash(cmd:*)",
-      "Bash(powershell.exe:*)"
+      "Bash(powershell.exe:*)",
+      "Bash($LOCALAPPDATA/Programs/Python/Python312-arm64/python.exe:*)",
+      "Bash(export:*)",
+      "Bash(echo exit: $?:*)"
     ]
   }
 }

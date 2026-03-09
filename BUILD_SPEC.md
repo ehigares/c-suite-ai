@@ -558,3 +558,61 @@ plus test suite reorganization.
 ### Release
 - Tag v1.1.0 after all fixes verified
 - README updated with v1.0.0 → v1.1.0 changelog
+---
+
+## Sprint 9 — Security Polish & Cost Visibility
+*Added 2026-03-08 following second third-party code review (v1.1.0)*
+
+### Motivation
+Three remaining gaps identified in v1.1.0 review:
+- Minimum password length of 4 chars is too low
+- Login lockout resets on server restart (memory-only)
+- No cost visibility — users don't know API call or token costs upfront
+
+### Deliverables
+
+#### 1. Minimum Password Length — 8 Characters
+- Backend: reject passwords under 8 chars with HTTP 422
+- Frontend: inline error "Password must be at least 8 characters"
+- Existing short-password users: prompted to update on next login
+- Password change flow also enforces 8-char minimum
+- Tests: 7-char (fail), 8-char (pass), 9-char (pass)
+
+#### 2. Persistent Login Lockout
+- Lockout state written to data/.lockout (JSON, gitignored)
+- Structure: { "locked_until", "failed_attempts", "last_attempt" }
+- Atomic writes (temp file + rename) to prevent corruption
+- Loaded on server start, cleared on success or expiry
+- data/.lockout added to .gitignore
+- Tests: persists across restart, clears on success, clears on expiry
+
+#### 3. Cost Visibility
+- New file: frontend/src/utils/costEstimate.js
+  - calculateApiCalls(councilSize) → (N × 2) + 1
+  - estimateInputTokens(messageText, historyLength) → approximate int
+  - formatCostHint(apiCalls, tokenEstimate) → display string
+- CouncilPicker.jsx: live API call count below model selection
+  (updates as models are selected/deselected)
+- ChatInterface.jsx: subtle cost hint in conversation header
+  (debounced 300ms token estimate as user types)
+- Never show dollar amounts
+- Display is subtle: gray text, small font, clearly labeled as estimate
+
+### New Files
+- frontend/src/utils/costEstimate.js
+- data/.lockout (runtime only, gitignored)
+
+### Modified Files
+- backend/main.py (password length validation, lockout persistence)
+- frontend/src/components/LoginScreen.jsx (8-char enforcement)
+- frontend/src/components/Settings.jsx (8-char on password change)
+- frontend/src/components/CouncilPicker.jsx (API call count display)
+- frontend/src/components/ChatInterface.jsx (cost hint in header)
+- .gitignore (add data/.lockout)
+- README.md (updated security section, new minimum documented)
+- BUILD_SPEC.md (this entry)
+
+### Release
+- Tag v1.2.0 after all changes verified
+- Commit: "Sprint 9: security polish + cost visibility"
+- Push tag to github.com/ehigares/llm-council
