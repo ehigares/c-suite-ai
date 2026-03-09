@@ -1,5 +1,5 @@
 /**
- * Cost estimation utilities for LLM Council.
+ * Cost estimation utilities for C-Suite AI.
  *
  * Provides API call counts and rough token estimates so users know
  * what a question will cost before sending it. Never shows dollar
@@ -46,4 +46,19 @@ export function formatCostHint(apiCalls, tokenEstimate = 0) {
     hint += ` · ~${tokenEstimate.toLocaleString()} input tokens per model`;
   }
   return hint;
+}
+
+/**
+ * Strip common provider prefixes from model display names.
+ * "Anthropic: Claude 3.5 Sonnet" → "Claude 3.5 Sonnet"
+ * "OpenAI: GPT-4o" → "GPT-4o"
+ *
+ * @param {string} name - The display name to clean
+ * @returns {string} Display name without provider prefix
+ */
+export function stripProviderPrefix(name) {
+  if (!name) return '';
+  // Match "Provider: Model Name" pattern
+  const match = name.match(/^[A-Za-z0-9]+:\s+(.+)$/);
+  return match ? match[1] : name;
 }

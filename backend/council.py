@@ -1,4 +1,4 @@
-"""3-stage LLM Council orchestration.
+"""3-stage C-Suite AI council orchestration.
 
 Accepts a council_config dict (the locked snapshot for this conversation)
 rather than pulling from global constants — this is what allows each
@@ -215,7 +215,7 @@ async def stage3_synthesize_final(
 
     history_prefix = _build_history_prefix(history)
 
-    chairman_prompt = f"""{history_prefix}You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
+    chairman_prompt = f"""{history_prefix}You are the Chairman of a C-Suite AI council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
 
 Original Question: {user_query}
 

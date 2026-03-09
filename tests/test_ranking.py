@@ -163,7 +163,7 @@ def test_empty():
 # ---------------------------------------------------------------------------
 
 def main():
-    print("\nLLM Council — Ranking Parse Tests")
+    print("\nC-Suite AI — Ranking Parse Tests")
     print("=" * 60)
     print("(No API keys or running server required)")
 

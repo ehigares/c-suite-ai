@@ -1,7 +1,7 @@
 [project]
-name = "llm-council"
-version = "0.1.0"
-description = "Your LLM Council"
+name = "c-suite-ai"
+version = "1.2.1"
+description = "C-Suite AI — Multi-model AI council debate platform"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

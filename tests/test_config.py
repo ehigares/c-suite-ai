@@ -508,7 +508,7 @@ def test_lockout_persistence():
 # ---------------------------------------------------------------------------
 
 def main():
-    print("\nLLM Council — Config Tests")
+    print("\nC-Suite AI — Config Tests")
     print("=" * 60)
     print("(No API keys or running server required)")
 

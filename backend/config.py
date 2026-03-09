@@ -1,4 +1,4 @@
-"""Configuration loader for LLM Council.
+"""Configuration loader for C-Suite AI.
 
 Loads and saves council_config.json from the data/ directory.
 Runs orphan detection on every load so stale chairman/summarization
@@ -373,6 +373,11 @@ def save_config(config: Dict[str, Any]):
     API keys are encrypted before writing to disk. Internal keys (those
     starting with '_') are stripped before writing.
 
+    If an API key looks masked (ends with '...' or equals '***'), the
+    original encrypted value from disk is preserved instead of encrypting
+    the masked string. This prevents the frontend's masked display values
+    from overwriting the real encrypted keys.
+
     Args:
         config: Config dict with plaintext keys (may include '_warnings' — will be stripped)
     """
@@ -381,22 +386,47 @@ def save_config(config: Dict[str, Any]):
     # Strip internal-only keys before persisting
     clean = {k: v for k, v in config.items() if not k.startswith("_")}
 
-    # Encrypt API keys if we have the Fernet key
-    if _fernet_key:
-        clean = _encrypt_model_keys(clean, _fernet_key)
-
-    # Preserve the password hash from the existing file (callers don't pass it)
+    # Load existing config from disk to preserve masked keys and password hash
+    existing = {}
     if _CONFIG_PATH.exists():
         try:
             with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
                 existing = json.load(f)
-            if "password_hash" in existing and "password_hash" not in clean:
-                clean["password_hash"] = existing["password_hash"]
         except (json.JSONDecodeError, OSError):
             pass
 
+    # Build a lookup of existing encrypted keys by model ID
+    existing_keys_by_id = {}
+    for m in existing.get("available_models", []):
+        existing_keys_by_id[m["id"]] = m.get("api_key", "")
+
+    # Encrypt API keys if we have the Fernet key, but preserve masked keys
+    if _fernet_key:
+        clean = copy.deepcopy(clean)
+        for model in clean.get("available_models", []):
+            key = model.get("api_key", "")
+            if _is_masked_key(key):
+                # Key was masked by _mask_api_keys() — preserve original encrypted value
+                model["api_key"] = existing_keys_by_id.get(model["id"], "")
+            else:
+                # Key is plaintext (new or changed) — encrypt it
+                model["api_key"] = _encrypt_api_key(key, _fernet_key)
+    else:
+        clean = copy.deepcopy(clean)
+
+    # Preserve the password hash from the existing file (callers don't pass it)
+    if "password_hash" in existing and "password_hash" not in clean:
+        clean["password_hash"] = existing["password_hash"]
+
     with open(_CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(clean, f, indent=2)
+
+
+def _is_masked_key(key: str) -> bool:
+    """Check if an API key is a masked display value from the frontend."""
+    if not key:
+        return False
+    return key.endswith("...") or key == "***"
 
 
 # ---------------------------------------------------------------------------

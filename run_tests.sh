@@ -1,11 +1,11 @@
 #!/bin/bash
-# Run all LLM Council tests.
+# Run all C-Suite AI tests.
 # Usage: ./run_tests.sh (from project root)
 
 set -e
 
 echo "========================================"
-echo "  LLM Council — Test Suite"
+echo "  C-Suite AI — Test Suite"
 echo "========================================"
 
 FAILED=0

@@ -288,7 +288,7 @@ async def test_summarization_noop_paths():
 # ---------------------------------------------------------------------------
 
 def main():
-    print("\nLLM Council — Pipeline Logic Tests")
+    print("\nC-Suite AI — Pipeline Logic Tests")
     print("=" * 60)
     print("(No API keys or running server required)")
 

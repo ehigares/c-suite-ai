@@ -1,9 +1,9 @@
-# LLM Council
+# C-Suite AI
 
 Ask a question and watch a panel of AI models debate it — then have a Chairman model
 synthesize the best answer from everything they said.
 
-Instead of asking one AI and hoping for the best, LLM Council sends your question to
+Instead of asking one AI and hoping for the best, C-Suite AI sends your question to
 several models at once, has them critique each other's answers, and produces a final
 response that draws on the best thinking from all of them.
 
@@ -44,7 +44,7 @@ More private and often cheaper for heavy use, but requires some setup. See
 [RUNPOD_SETUP.md](RUNPOD_SETUP.md) for a step-by-step walkthrough.
 
 **Local (Ollama)** — If you have Ollama installed and running on your own computer,
-LLM Council can talk to it directly. No API key needed. The base URL is
+C-Suite AI can talk to it directly. No API key needed. The base URL is
 `http://localhost:11434/v1`.
 
 **Custom** — Any service that speaks the OpenAI API format. If you have another
@@ -75,8 +75,8 @@ Open a terminal (Command Prompt or PowerShell on Windows, Terminal on Mac/Linux)
 run these commands one at a time:
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/llm-council.git
-cd llm-council
+git clone https://github.com/YOUR-USERNAME/c-suite-ai.git
+cd c-suite-ai
 ```
 
 **Install Python dependencies:**
@@ -148,7 +148,7 @@ answer. Pick your best/most capable model for this role.
 to compress old conversation history. Any model works here — it doesn't need to be
 your best one.
 
-**Done.** Click "Start Using LLM Council" and you're ready to go.
+**Done.** Click "Start Using C-Suite AI" and you're ready to go.
 
 You can reopen Settings any time by clicking the gear icon (⚙) at the bottom of
 the left sidebar.
@@ -223,7 +223,7 @@ All files in `data/` are excluded from Git and will never be accidentally commit
 ### Network security
 
 **Never expose port 8001 to the public internet** without additional protection
-(VPN, reverse proxy with TLS, etc.). LLM Council is designed for local or LAN use.
+(VPN, reverse proxy with TLS, etc.). C-Suite AI is designed for local or LAN use.
 The default configuration only allows connections from localhost.
 
 ### Changing your password
@@ -265,7 +265,7 @@ python -m tests.test_ranking     # Ranking parse logic — well-formed, malforme
 
 ## LAN Access
 
-By default, LLM Council only accepts connections from `localhost`. To access it from
+By default, C-Suite AI only accepts connections from `localhost`. To access it from
 other devices on your local network (e.g., a phone or another computer), set the
 `ALLOWED_ORIGINS` environment variable before starting the backend:
 
@@ -278,7 +278,7 @@ is not `localhost`, `127.0.0.1`, or `::1`, the backend automatically binds to `0
 (all network interfaces) instead of localhost only.
 
 **Important:** Never expose the backend to the public internet without additional
-protection (VPN, reverse proxy with TLS, firewall rules). LLM Council is designed
+protection (VPN, reverse proxy with TLS, firewall rules). C-Suite AI is designed
 for local and trusted-LAN use only.
 
 ---
@@ -326,8 +326,8 @@ The backend isn't running. Start it with `python -m backend.main` and refresh.
 
 ## Credits
 
-Based on the original [llm-council](https://github.com/karpathy/llm-council) concept by
-Andrej Karpathy. This fork adds a full settings UI, multi-source model support, RunPod
+Inspired by the original [LLM Council concept](https://github.com/karpathy/llm-council) by
+Andrej Karpathy. C-Suite AI adds a full settings UI, multi-source model support, RunPod
 integration, conversation history with background summarization, and a first-run wizard.
 
 ---

@@ -1,5 +1,5 @@
 /**
- * API client for the LLM Council backend.
+ * API client for the C-Suite AI backend.
  *
  * All authenticated requests include the JWT token from sessionStorage.
  * If a 401 response is received, the onAuthExpired callback is triggered
@@ -158,12 +158,17 @@ export const api = {
   /**
    * Create a new conversation with a locked council snapshot.
    * @param {string[]} councilModelIds - UUIDs of models selected for this conversation
+   * @param {string} [chairmanId] - Override chairman for this conversation
+   * @param {string} [summarizationModelId] - Override summarization model for this conversation
    */
-  async createConversation(councilModelIds) {
+  async createConversation(councilModelIds, chairmanId, summarizationModelId) {
+    const body = { council_model_ids: councilModelIds };
+    if (chairmanId) body.chairman_id = chairmanId;
+    if (summarizationModelId) body.summarization_model_id = summarizationModelId;
     const response = await apiFetch(`${API_BASE}/api/conversations`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ council_model_ids: councilModelIds }),
+      body: JSON.stringify(body),
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));

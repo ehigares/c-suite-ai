@@ -1,4 +1,4 @@
-# LLM Council — Complete Build Specification v2
+# C-Suite AI — Complete Build Specification v2
 **Status: ALL DECISIONS LOCKED — Fully audited, ready for implementation**
 *Last updated: 2026-03-08*
 
@@ -6,7 +6,7 @@
 
 ## What We're Building
 
-A modified fork of Andrej Karpathy's [LLM Council](https://github.com/karpathy/llm-council) — a chat interface where multiple AI models debate each other across 3 stages before producing a synthesized final answer.
+Originally inspired by Andrej Karpathy's LLM Council concept — a chat interface where multiple AI models debate each other across 3 stages before producing a synthesized final answer.
 
 **Key improvements over the original:**
 1. Any OpenAI-compatible API as a model source (OpenRouter, RunPod+Ollama, local Ollama, etc.)
@@ -73,7 +73,7 @@ A modified fork of Andrej Karpathy's [LLM Council](https://github.com/karpathy/l
 | Empty API key handling | Omit Authorization header entirely when api_key is empty string |
 | Settings vs. council picker | Settings = model pool management; council picker lives inside new conversation flow |
 | Empty pool in council picker | Replace picker with friendly prompt + "Launch Setup Wizard" button |
-| Repo | Fork Karpathy's repo, keep name "LLM Council" |
+| Repo | Independent repo: github.com/ehigares/c-suite-ai |
 | data/ directory | `.gitkeep` in repo + `mkdir -p` safety net in `config.py` |
 | Phase 1 testability | `council_config.example.json` created in Phase 1 (moved from Phase 5) |
 
@@ -615,4 +615,100 @@ Three remaining gaps identified in v1.1.0 review:
 ### Release
 - Tag v1.2.0 after all changes verified
 - Commit: "Sprint 9: security polish + cost visibility"
-- Push tag to github.com/ehigares/llm-council
+- Push tag to github.com/ehigares/c-suite-ai
+---
+
+## Sprint 9.5 — Rebrand to C-Suite AI + Critical Bug Fixes
+*Added 2026-03-09 following first live end-to-end test with real API keys*
+
+### Rebrand
+The project has been renamed from LLM Council to C-Suite AI and detached
+from the karpathy/llm-council fork as an independent repository.
+
+New repo: github.com/ehigares/c-suite-ai
+Old repo: github.com/ehigares/llm-council (deleted after migration)
+
+All references to "LLM Council" replaced with "C-Suite AI" across:
+- All frontend components and UI text
+- Browser tab title
+- package.json and pyproject.toml name fields
+- README.md, RUNPOD_SETUP.md, CLAUDE.md, DEV_JOURNAL.md, BUILD_SPEC.md
+
+### Background
+First live test conducted 2026-03-09 using OpenRouter API keys with a
+3-model council (Claude 3.5 Sonnet, GPT-4o Mini, Llama 3.1 8B Instruct).
+The full pipeline was confirmed working on the first successful run.
+Several critical bugs were discovered on subsequent runs.
+
+### What Was Confirmed Working
+- First run wizard (password, model add, Test Connection)
+- Council picker with chairman badge and source badges
+- All 3 stages completing with real model responses
+- Cost visibility (API call count in header)
+- Peer rankings with aggregate Street Cred scoring
+- Chairman synthesis producing structured final answers
+- Conversation storage persisting to disk correctly
+
+### Bugs Fixed in Sprint 9.5
+
+#### BUG 1 — API Key Decryption Corruption (Critical)
+After server restart and re-login, all models return 401 Unauthorized.
+Editing a model in Settings shows a shorter key than originally saved,
+confirming decryption truncates or corrupts the stored key.
+Fix: Audit PBKDF2 key derivation and Fernet decryption path in
+backend/config.py and backend/main.py login endpoint. Ensure full
+original key is recovered after restart, not masked or truncated.
+Also fix Test Connection to verify authentication not just reachability.
+
+#### BUG 2 — React Hooks Violation in ChatInterface (Critical)
+Clicking any existing conversation shows a blank page.
+Browser console: "Rendered more hooks than during the previous render
+at ChatInterface.jsx:81"
+A useMemo hook was being called conditionally, violating React rules.
+Fix: Move all hook declarations to top of ChatInterface component
+before any conditional logic. Verified by loading existing conversations
+with no console errors.
+
+#### BUG 3 — Blank Page on Session Expiry (Medium)
+JWT expiry causes blank page instead of login redirect.
+Fix: Global apiFetch 401 handler redirects to login cleanly. Login
+screen remembers and restores the conversation the user was trying
+to access.
+
+#### BUG 4 — Empty Conversation Pre-loaded on Startup (Medium)
+A blank New Conversation pre-loads on every startup.
+Fix: Startup shows welcome screen with no conversation selected.
+If no models configured, redirect to Setup Wizard automatically.
+
+#### BUG 5 — Last Conversation Not Restored After Re-login (Medium)
+After session expiry and re-login, user lands on welcome screen.
+Fix: Last active conversation ID stored in localStorage. Restored
+after successful re-login. Cleared if conversation no longer exists.
+
+#### BUG 6 — Test Connection Does Not Verify Authentication (Low)
+Test Connection returned Connected even with wrong API key.
+Fix: Test Connection sends authenticated request and checks for 401.
+Returns clear Connected or Authentication failed result.
+
+### New Feature: 3-Screen New Conversation Flow
+Previously one screen (council picker only). Now 3 screens:
+- Screen 1: Choose Your Council (multi-select, unchanged)
+- Screen 2: Choose Your Chairman (single select, defaults to Settings
+  value, Use Default button to skip)
+- Screen 3: Choose Your Summarization Model (single select, defaults
+  to Settings value, Use Default button to skip)
+Both selections locked into conversation snapshot at creation time.
+
+New components:
+- frontend/src/components/ChairmanPicker.jsx
+- frontend/src/components/SummarizationPicker.jsx
+
+### UX Improvements
+- Actionable error messages replace technical error strings
+- Model display names never show provider prefix
+- Test Connection validates authentication not just reachability
+
+### Release
+- Tag v1.2.1 after all changes verified and 101 tests passing
+- Commit: "Sprint 9.5: rebrand to C-Suite AI + critical bug fixes"
+- Push to github.com/ehigares/c-suite-ai

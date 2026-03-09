@@ -439,9 +439,9 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
     return (
       <div className="wizard-step">
         <div className="wizard-icon">🤝</div>
-        <h2>Welcome to LLM Council</h2>
+        <h2>Welcome to C-Suite AI</h2>
         <p>
-          LLM Council lets multiple AI models debate your questions and then
+          C-Suite AI lets multiple AI models debate your questions and then
           synthesizes their answers into a single response.
         </p>
         <p className="wizard-tip">
@@ -662,7 +662,7 @@ export default function Settings({ isOpen, onClose, onConfigSaved, forceWizard }
           onClick={finishWizard}
           disabled={isSaving}
         >
-          {isSaving ? 'Saving…' : 'Start Using LLM Council →'}
+          {isSaving ? 'Saving…' : 'Start Using C-Suite AI →'}
         </button>
         {saveError && <div className="save-error" style={{ marginTop: 12 }}>{saveError}</div>}
       </div>

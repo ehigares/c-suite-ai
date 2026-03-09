@@ -1,8 +1,8 @@
-# Run all LLM Council tests.
+# Run all C-Suite AI tests.
 # Usage: powershell -ExecutionPolicy Bypass -File run_tests.ps1
 
 Write-Host "========================================"
-Write-Host "  LLM Council - Test Suite"
+Write-Host "  C-Suite AI - Test Suite"
 Write-Host "========================================"
 
 $failed = $false

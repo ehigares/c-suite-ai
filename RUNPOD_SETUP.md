@@ -1,6 +1,6 @@
 # RunPod Setup Guide
 
-This guide walks you through running a model on RunPod so you can use it in LLM Council.
+This guide walks you through running a model on RunPod so you can use it in C-Suite AI.
 RunPod lets you rent a GPU in the cloud and run any Ollama-compatible model on it privately.
 
 You do not need to be a developer to follow these steps.
@@ -16,7 +16,7 @@ You do not need to be a developer to follow these steps.
   DeepSeek, and hundreds more).
 
 The trade-off: RunPod instances can "go to sleep" after a period of inactivity and take
-30–90 seconds to wake back up. LLM Council has a **Wake Up Models** button to handle this.
+30–90 seconds to wake back up. C-Suite AI has a **Wake Up Models** button to handle this.
 
 ---
 
@@ -107,7 +107,7 @@ Before you can use a model, you need to download it to your volume.
    Replace `llama3.3:70b` with the model you want. You can browse available models
    at [ollama.com/library](https://ollama.com/library).
 
-   Common models for LLM Council:
+   Common models for C-Suite AI:
    - `llama3.3:70b` — Excellent all-around, requires 80 GB VRAM
    - `llama3.1:8b` — Fast and efficient, 24 GB VRAM
    - `qwen2.5:72b` — Strong at coding and analysis, 80 GB VRAM
@@ -118,9 +118,9 @@ Before you can use a model, you need to download it to your volume.
 
 ---
 
-## Step 6 — Add the Model to LLM Council
+## Step 6 — Add the Model to C-Suite AI
 
-1. Open LLM Council in your browser and click the gear icon (⚙) to open Settings.
+1. Open C-Suite AI in your browser and click the gear icon (⚙) to open Settings.
 2. Click the **Models** tab, then **+ Add Model**.
 3. Fill in the fields:
 
@@ -145,7 +145,7 @@ Before you can use a model, you need to download it to your volume.
 RunPod serverless endpoints sleep when idle. Before starting a conversation with a
 RunPod model, you may need to wake it up first.
 
-At the top of every conversation, LLM Council shows a **Wake Up Models** button when
+At the top of every conversation, C-Suite AI shows a **Wake Up Models** button when
 your council includes any RunPod models. The button has three states:
 
 - **Red** — The endpoint is asleep or unreachable. Click to send a wake-up request.
@@ -187,5 +187,5 @@ correct in Settings and that your RunPod account has credit available.
 - Try redeploying the endpoint from the RunPod dashboard
 
 **Can I use RunPod for the Chairman role?**
-Yes. RunPod models work the same as any other model in LLM Council. A large model
+Yes. RunPod models work the same as any other model in C-Suite AI. A large model
 like Llama 3.3 70B makes an excellent Chairman.

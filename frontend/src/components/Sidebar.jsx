@@ -14,7 +14,7 @@ export default function Sidebar({
     <div className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-title-row">
-          <h1>LLM Council</h1>
+          <h1>C-Suite AI</h1>
           <button
             className="gear-btn"
             onClick={onOpenSettings}

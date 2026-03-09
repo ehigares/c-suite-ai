@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# LLM Council - Start script
+# C-Suite AI - Start script
 # Works on macOS, Linux, and Git Bash on Windows
 
-echo "Starting LLM Council..."
+echo "Starting C-Suite AI..."
 echo ""
 
 # Start backend
@@ -47,7 +47,7 @@ npm run dev &
 FRONTEND_PID=$!
 
 echo ""
-echo "LLM Council is running!"
+echo "C-Suite AI is running!"
 echo "  Backend:  http://localhost:8001"
 echo "  Frontend: http://localhost:5173"
 echo ""

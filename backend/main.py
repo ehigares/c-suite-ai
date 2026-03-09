@@ -1,4 +1,4 @@
-"""FastAPI backend for LLM Council."""
+"""FastAPI backend for C-Suite AI."""
 
 import asyncio
 import json
@@ -76,7 +76,7 @@ BIND_HOST = _derive_bind_host(ALLOWED_ORIGINS)
 
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="LLM Council API")
+app = FastAPI(title="C-Suite AI API")
 app.state.limiter = limiter
 
 
@@ -219,6 +219,8 @@ async def auth_middleware(request: Request, call_next):
 class CreateConversationRequest(BaseModel):
     """Request to create a new conversation, including the locked council config."""
     council_model_ids: List[str]   # UUIDs of models selected for this conversation
+    chairman_id: Optional[str] = None  # Override chairman for this conversation
+    summarization_model_id: Optional[str] = None  # Override summarization model
 
 
 class SendMessageRequest(BaseModel):
@@ -368,7 +370,7 @@ def _sanitize_model_config(model: Dict[str, Any]) -> Dict[str, Any]:
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"status": "ok", "service": "LLM Council API"}
+    return {"status": "ok", "service": "C-Suite AI API"}
 
 
 @app.get("/api/health")
@@ -548,6 +550,9 @@ async def test_connection(request: Request, body: TestConnectionRequest):
         "display_name": body.display_name or body.model,
     }
     result = await check_endpoint_health(model_config)
+    # Surface auth failure clearly for the frontend
+    if result.get("alive") and not result.get("auth_ok", True):
+        result["error"] = "Authentication failed — check your API key."
     return result
 
 
@@ -647,14 +652,19 @@ async def create_conversation(request: Request, body: CreateConversationRequest)
     if not selected_models:
         raise HTTPException(status_code=400, detail="No valid council models selected.")
 
-    chairman = get_chairman(config)
-    if chairman is None:
+    # Use per-conversation chairman if provided, otherwise fall back to global default
+    chairman_id = body.chairman_id or config.get("chairman_id")
+    if not chairman_id:
         raise HTTPException(status_code=400, detail="No chairman model configured. Please set one in Settings.")
+
+    # Use per-conversation summarization model if provided, otherwise fall back to global
+    summarization_id = body.summarization_model_id or config.get("summarization_model_id")
 
     # Build the locked council snapshot stored with the conversation
     council_snapshot = {
         "available_models": selected_models,
-        "chairman_id": config.get("chairman_id"),
+        "chairman_id": chairman_id,
+        "summarization_model_id": summarization_id,
         "council_model_ids": body.council_model_ids,
     }
 
@@ -824,7 +834,21 @@ async def send_message_stream(request: Request, conversation_id: str, body: Send
             yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            # UX improvement: replace technical errors with actionable messages
+            error_msg = str(e)
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                error_msg = (
+                    "Unable to reach one or more models — authentication failed. "
+                    "Please check your API keys in Settings → Models and verify "
+                    "each model's connection with Test Connection."
+                )
+            elif "Unable to generate final synthesis" in error_msg:
+                error_msg = (
+                    "Unable to generate the final synthesis. This can happen when "
+                    "the Chairman model is unreachable or returned an error. "
+                    "Please check Settings → Models to verify your model connections."
+                )
+            yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
 
     return StreamingResponse(
         event_generator(),

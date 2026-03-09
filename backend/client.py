@@ -86,16 +86,16 @@ async def check_endpoint_health(
     timeout: float = 30.0
 ) -> Dict[str, Any]:
     """
-    Check if a model endpoint is alive by calling GET {base_url}/models.
-
-    Also verifies the configured model ID is present in the response.
+    Check if a model endpoint is alive by calling GET {base_url}/models,
+    then verify authentication by making a minimal chat completion request.
 
     Args:
         model_config: Dict with 'model', 'base_url', 'api_key', 'display_name' keys
         timeout: Request timeout in seconds
 
     Returns:
-        Dict with 'alive' (bool), 'model_loaded' (bool), and optional 'error' (str)
+        Dict with 'alive' (bool), 'model_loaded' (bool), 'auth_ok' (bool),
+        and optional 'error' (str)
     """
     headers = {"Content-Type": "application/json"}
     api_key = model_config.get("api_key", "")
@@ -115,7 +115,44 @@ async def check_endpoint_health(
             model_ids = [m.get("id", "") for m in data.get("data", [])]
             model_loaded = model_config["model"] in model_ids
 
-            return {"alive": True, "model_loaded": model_loaded}
+            # Verify authentication with a minimal chat completion request
+            # This catches cases where /models is public but the key is invalid
+            auth_ok = True
+            if api_key:
+                auth_ok = await _verify_auth(client, base_url, headers, model_config["model"])
+
+            return {
+                "alive": True,
+                "model_loaded": model_loaded,
+                "auth_ok": auth_ok,
+            }
 
     except Exception as e:
-        return {"alive": False, "model_loaded": False, "error": str(e)}
+        return {"alive": False, "model_loaded": False, "auth_ok": False, "error": str(e)}
+
+
+async def _verify_auth(
+    client: httpx.AsyncClient,
+    base_url: str,
+    headers: Dict[str, str],
+    model: str,
+) -> bool:
+    """
+    Verify authentication by sending a minimal chat completion request.
+    Returns True if the key is accepted (not 401/403), False otherwise.
+    """
+    url = f"{base_url}/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+    }
+    try:
+        response = await client.post(url, headers=headers, json=payload)
+        if response.status_code in (401, 403):
+            return False
+        # Any other response (200, 400, 429, etc.) means the key was accepted
+        return True
+    except Exception:
+        # Network errors don't indicate auth failure
+        return True

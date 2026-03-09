@@ -1,4 +1,4 @@
-# LLM Council — Dev Journal
+# C-Suite AI — Dev Journal
 
 This file is maintained by Claude Code throughout the project. It is updated at the end of
 every sprint and whenever a significant decision or problem is encountered.
@@ -7,8 +7,8 @@ every sprint and whenever a significant decision or problem is encountered.
 
 ## Project Status
 
-**Current Sprint:** Sprint 9 — Security Polish & Cost Visibility
-**Overall Status:** 🟢 Sprint 9 complete
+**Current Sprint:** Sprint 9.5 — Rebrand + Critical Bug Fixes
+**Overall Status:** 🟢 Sprint 9.5 complete
 
 ---
 
@@ -402,6 +402,42 @@ Test E — WakeUpButton:
 
 ---
 
+### Sprint 9.5 — Rebrand to C-Suite AI + Critical Bug Fixes
+**Status:** ✅ Complete
+**Goal:** Rebrand from LLM Council to C-Suite AI, fix critical bugs found in first live test, add 3-screen new conversation flow.
+
+**Tasks:**
+- [x] Rebrand: replace all "LLM Council" / "llm-council" with "C-Suite AI" / "c-suite-ai" across entire codebase
+- [x] Update package.json, pyproject.toml, uv.lock name fields
+- [x] Update browser tab title, login screen, sidebar, welcome text
+- [x] Bug 1 fix: API key decryption corruption — save_config now preserves original encrypted keys when frontend sends masked values
+- [x] Bug 2 fix: React hooks violation — moved useMemo before early return in ChatInterface
+- [x] Bug 3 fix: Session expiry blank page — handleAuthExpired now clears conversation state before redirecting to login
+- [x] Bug 4 fix: Empty conversation pre-loaded — startup shows welcome screen; auto-opens wizard if no models configured
+- [x] Bug 5 fix: Restore last active conversation — last conversation ID stored in localStorage, restored after re-login
+- [x] Bug 6 fix: Test Connection auth verification — check_endpoint_health now makes a minimal chat completion request to verify API key
+- [x] New: 3-screen new conversation flow (Council → Chairman → Summarization)
+- [x] New: ChairmanPicker.jsx and SummarizationPicker.jsx components
+- [x] New: Per-conversation chairman and summarization model selection (locked into snapshot)
+- [x] UX: Actionable error messages in streaming endpoint (replace technical 401 errors)
+- [x] UX: stripProviderPrefix utility — model display names never show provider prefix
+- [x] Update DEV_JOURNAL, CLAUDE.md, BUILD_SPEC.md with rebrand notes
+
+**Verification Checklist:**
+- [x] All 110 tests pass (pipeline 47, config 39, ranking 24)
+- [x] Frontend build clean: 213 modules, 0 errors, 0 warnings
+- [x] No "LLM Council" references remain in code files
+- [x] All hooks in ChatInterface declared before conditional returns
+- [ ] Full end-to-end verification — requires live backend with API keys
+
+**Notes:**
+- Bug 1 root cause: POST /api/config received masked keys from frontend (e.g. "sk-or-ab...") and re-encrypted them, destroying the original encrypted values. Fix: `save_config()` now detects masked keys (ending with "..." or equal to "***") and preserves the original encrypted value from disk.
+- Bug 2 root cause: `useMemo` for councilModels was declared after the `if (!conversation) return` early exit, causing React to see a different number of hooks between renders.
+- Bug 6 fix: `check_endpoint_health` now returns `auth_ok` field. After the GET /models check, it makes a minimal POST to /chat/completions with max_tokens=1 to verify the API key is accepted (checks for 401/403).
+- 3-screen flow: CouncilPicker now shows "Continue" instead of "Start Conversation". The chairman and summarization model IDs are passed through to `createConversation()` and stored in the conversation snapshot.
+
+---
+
 ## Decisions Made During Build
 
 *(Claude Code logs any decisions made during implementation that weren't in the original spec)*
@@ -419,6 +455,9 @@ Test E — WakeUpButton:
 | 2026-03-08 | 9 | Password too short = non-blocking banner | Avoids locking out existing users; they can still use the app while being prompted to update |
 | 2026-03-08 | 9 | Lockout is IP-agnostic (single state file) | Single-user app; per-IP tracking unnecessary and complicates disk persistence |
 | 2026-03-08 | 9 | No dollar-amount cost display | Pricing varies too much across providers; API call count and token estimate are always accurate |
+| 2026-03-09 | 9.5 | Masked keys preserved in save_config | Detecting "..." suffix prevents frontend masked keys from corrupting stored encrypted keys |
+| 2026-03-09 | 9.5 | Auth check via minimal chat completion | GET /models is public on OpenRouter; a POST with max_tokens=1 reliably detects invalid keys |
+| 2026-03-09 | 9.5 | Per-conversation chairman/summarization | Stored in council snapshot alongside council_model_ids; global config used as fallback |
 
 ---
 
@@ -429,3 +468,6 @@ Test E — WakeUpButton:
 | Date | Sprint | Problem | Solution |
 |---|---|---|---|
 | 2026-03-08 | 7 | `cryptography` package fails to build from source on Windows ARM64 (no Rust toolchain) | Use `--only-binary=:all:` flag to install pre-built wheel (v46.0.3 has ARM64 wheel) |
+| 2026-03-09 | 9.5 | API keys corrupted after server restart — all models return 401 | `save_config()` was re-encrypting masked keys from frontend. Fix: detect masked keys and preserve original encrypted values from disk |
+| 2026-03-09 | 9.5 | ChatInterface blank page when clicking conversations | `useMemo` was after early return — violated React hooks rules. Fix: move all hooks above conditional returns |
+| 2026-03-09 | 9.5 | Test Connection showed Connected even with wrong API key | `check_endpoint_health` only called GET /models (public endpoint). Fix: added minimal POST /chat/completions check to verify auth |

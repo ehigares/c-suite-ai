@@ -1,4 +1,4 @@
-# CLAUDE.md — LLM Council Project Standing Orders
+# CLAUDE.md — C-Suite AI Project Standing Orders
 
 This file contains instructions that Claude Code must follow throughout the entire project.
 Read this file completely before doing anything else in any session.
@@ -265,3 +265,61 @@ codebase. Read this section before touching any auth, config, or API code.
 
 ### New Sensitive File
 - data/.lockout — added to .gitignore, documents in README
+---
+
+## Sprint 9.5 Additions (added 2026-03-09)
+
+### Rebrand
+- Project is now named C-Suite AI (formerly LLM Council)
+- Repo is now github.com/ehigares/c-suite-ai (formerly ehigares/llm-council)
+- All references to "LLM Council" in code, UI, and docs replaced with "C-Suite AI"
+- Project is fully detached from karpathy/llm-council fork
+
+### API Key Encryption Rules
+- Fernet encryption key is derived from user password via PBKDF2 on login
+- On server restart, derived key is cleared from memory — this is correct
+- On re-login, key MUST be fully re-derived and correctly used to decrypt
+  stored API keys — the full original key must be recoverable, not truncated
+- Never pass a masked or shortened version of the key to the API client
+- Test Connection must verify authentication (check for 401), not just
+  server reachability — must return failure when key is wrong
+
+### React Hooks Rules (ChatInterface)
+- ALL hooks (useState, useRef, useEffect, useMemo) must be declared at
+  the TOP of the component, before any conditional logic or early returns
+- Never place a hook inside an if statement or after a conditional return
+- Violation causes "Rendered more hooks than during previous render" crash
+- This was found as a live bug: clicking existing conversations crashed
+  with a blank page due to a useMemo being called conditionally
+
+### Session Expiry Behavior
+- On 401 response from any API call: redirect to login screen cleanly
+- Never show a blank page on session expiry
+- After re-login: restore the last active conversation automatically
+- Store last active conversation ID in localStorage for restoration
+- Clear stored ID if conversation no longer exists on disk
+
+### Startup Behavior
+- Never pre-load an empty conversation on startup
+- Show welcome screen by default with no conversation selected
+- If no models configured: redirect to Setup Wizard automatically
+- Only create a conversation entry after user completes council selection
+
+### New Conversation Flow (3 screens)
+- Screen 1: Choose Your Council (multi-select models)
+- Screen 2: Choose Your Chairman (single select, defaults to Settings value)
+- Screen 3: Choose Your Summarization Model (single select, defaults to Settings value)
+- Both screens 2 and 3 must include a "Use Default" button to skip
+- Selected chairman and summarization model locked into conversation snapshot
+
+### Error Messages
+- Technical errors must be replaced with actionable user-friendly messages
+- "Unable to generate final synthesis" -> explain possible causes and
+  direct user to Settings -> Models to verify connection
+- Never show raw HTTP error codes to users without explanation
+
+### Model Display Names
+- Never show provider prefix in model display name
+- "Anthropic: Claude 3.5 Sonnet" -> "Claude 3.5 Sonnet"
+- Apply consistently across all components: header badges, council picker,
+  stage labels, chairman label in Stage 3

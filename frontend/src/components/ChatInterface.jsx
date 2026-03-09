@@ -5,7 +5,7 @@ import Stage2 from './Stage2';
 import Stage3 from './Stage3';
 import WakeUpButton from './WakeUpButton';
 import { SourceBadge } from './Settings';
-import { calculateApiCalls, estimateInputTokens, formatCostHint } from '../utils/costEstimate';
+import { calculateApiCalls, estimateInputTokens, formatCostHint, stripProviderPrefix } from '../utils/costEstimate';
 import './ChatInterface.css';
 
 export default function ChatInterface({
@@ -51,6 +51,23 @@ export default function ChatInterface({
     }
   };
 
+  // ── Council header data ────────────────────────────────────────────────────
+  //
+  // Memoised on conversation.id so the array reference is stable across the
+  // many setCurrentConversation() calls that happen during SSE streaming.
+  // Without this, WakeUpButton's useEffect fires on every streamed chunk and
+  // resets the button state from green back to idle-red mid-conversation.
+  //
+  // IMPORTANT: This hook MUST be declared before any conditional returns
+  // to avoid React's "Rendered more hooks than during the previous render" error.
+
+  const councilModels = useMemo(
+    () => conversation?.council_config?.available_models ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conversation?.id]
+  );
+  const chairmanId = conversation?.council_config?.chairman_id ?? '';
+
   // ── No conversation selected ───────────────────────────────────────────────
 
   if (!conversation) {
@@ -64,26 +81,12 @@ export default function ChatInterface({
           </div>
         )}
         <div className="empty-state">
-          <h2>Welcome to LLM Council</h2>
+          <h2>Welcome to C-Suite AI</h2>
           <p>Create a new conversation to get started</p>
         </div>
       </div>
     );
   }
-
-  // ── Council header data ────────────────────────────────────────────────────
-  //
-  // Memoised on conversation.id so the array reference is stable across the
-  // many setCurrentConversation() calls that happen during SSE streaming.
-  // Without this, WakeUpButton's useEffect fires on every streamed chunk and
-  // resets the button state from green back to idle-red mid-conversation.
-
-  const councilModels = useMemo(
-    () => conversation.council_config?.available_models ?? [],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [conversation.id]
-  );
-  const chairmanId = conversation.council_config?.chairman_id ?? '';
 
   // ── Active conversation ────────────────────────────────────────────────────
 
@@ -105,7 +108,7 @@ export default function ChatInterface({
             {councilModels.map((m) => (
               <span key={m.id} className="council-model-badge">
                 <SourceBadge baseUrl={m.base_url} />
-                <span className="council-model-badge-name">{m.display_name}</span>
+                <span className="council-model-badge-name">{stripProviderPrefix(m.display_name)}</span>
                 {m.id === chairmanId && (
                   <span className="council-chairman-crown" title="Chairman">👑</span>
                 )}
@@ -128,7 +131,7 @@ export default function ChatInterface({
         {conversation.messages.length === 0 ? (
           <div className="empty-state">
             <h2>Start a conversation</h2>
-            <p>Ask a question to consult the LLM Council</p>
+            <p>Ask a question to consult the C-Suite</p>
           </div>
         ) : (
           conversation.messages.map((msg, index) => (
@@ -144,7 +147,7 @@ export default function ChatInterface({
                 </div>
               ) : (
                 <div className="assistant-message">
-                  <div className="message-label">LLM Council</div>
+                  <div className="message-label">C-Suite AI</div>
 
                   {/* Stage 1 */}
                   {msg.loading?.stage1 && (

@@ -88,7 +88,7 @@ function LoginScreen({ onAuthenticated }) {
   return (
     <div className="login-screen">
       <div className="login-card">
-        <h1 className="login-title">LLM Council</h1>
+        <h1 className="login-title">C-Suite AI</h1>
 
         {mode === 'setup' ? (
           <>

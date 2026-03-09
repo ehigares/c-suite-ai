@@ -14,7 +14,7 @@
 
 import { useState, useMemo } from 'react';
 import { SourceBadge } from './Settings';
-import { calculateApiCalls } from '../utils/costEstimate';
+import { calculateApiCalls, stripProviderPrefix } from '../utils/costEstimate';
 import './CouncilPicker.css';
 
 export default function CouncilPicker({
@@ -164,7 +164,7 @@ export default function CouncilPicker({
                 />
                 <div className="picker-model-info">
                   <SourceBadge baseUrl={m.base_url} />
-                  <span className="picker-model-name">{m.display_name}</span>
+                  <span className="picker-model-name">{stripProviderPrefix(m.display_name)}</span>
                   <span className="picker-model-id">{m.model}</span>
                   {isChairman && (
                     <span className="chairman-badge">Chairman</span>
@@ -212,11 +212,9 @@ export default function CouncilPicker({
                 : undefined
             }
           >
-            {isCreating
-              ? 'Starting…'
-              : selectedCount < 2
+            {selectedCount < 2
               ? `Select ${2 - selectedCount} more`
-              : 'Start Conversation'}
+              : 'Continue'}
           </button>
         </div>
       </div>

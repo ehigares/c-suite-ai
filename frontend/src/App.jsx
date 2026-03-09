@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import CouncilPicker from './components/CouncilPicker';
+import ChairmanPicker from './components/ChairmanPicker';
+import SummarizationPicker from './components/SummarizationPicker';
 import Settings from './components/Settings';
 import LoginScreen from './components/LoginScreen';
 import { api, setOnAuthExpired, setToken, clearToken } from './api';
@@ -20,15 +22,23 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [forceWizard, setForceWizard] = useState(false);
 
-  // Council picker — shown instead of ChatInterface when starting a new conversation
-  const [showPicker, setShowPicker] = useState(false);
+  // 3-screen new conversation flow:
+  //   'council' -> 'chairman' -> 'summarization' -> create conversation
+  //   null = not in picker flow
+  const [pickerScreen, setPickerScreen] = useState(null);
+  const [pickerCouncilIds, setPickerCouncilIds] = useState([]);
+  const [pickerChairmanId, setPickerChairmanId] = useState(null);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
 
   // Global council config — drives warnings and CouncilPicker model list
   const [councilConfig, setCouncilConfig] = useState(null);
 
   // Register the auth-expired callback so api.js can trigger a logout
+  // Bug 3 fix: also clear conversation state to prevent blank page
   const handleAuthExpired = useCallback(() => {
+    setCurrentConversation(null);
+    setCurrentConversationId(null);
+    setPickerScreen(null);
     setIsAuthenticated(false);
   }, []);
 
@@ -68,17 +78,32 @@ function App() {
     }
   }, []);
 
-  // After authentication, load data
+  // After authentication, load data and restore last active conversation
   useEffect(() => {
     if (isAuthenticated) {
       loadConversations();
       loadCouncilConfig();
+      // Bug 5 fix: restore last active conversation from localStorage
+      const lastConvId = localStorage.getItem('lastActiveConversationId');
+      if (lastConvId) {
+        api.getConversation(lastConvId)
+          .then((conv) => {
+            setCurrentConversationId(lastConvId);
+            setCurrentConversation(conv);
+          })
+          .catch(() => {
+            // Conversation no longer exists — clear stored ID
+            localStorage.removeItem('lastActiveConversationId');
+          });
+      }
     }
   }, [isAuthenticated]);
 
   useEffect(() => {
     if (currentConversationId && isAuthenticated) {
       loadConversation(currentConversationId);
+      // Bug 5: persist last active conversation ID for restore after re-login
+      localStorage.setItem('lastActiveConversationId', currentConversationId);
     }
   }, [currentConversationId, isAuthenticated]);
 
@@ -115,6 +140,11 @@ function App() {
     try {
       const cfg = await api.getConfig();
       setCouncilConfig(cfg);
+      // Bug 4 fix: if no models configured, auto-open wizard
+      if ((cfg.available_models?.length ?? 0) === 0) {
+        setForceWizard(true);
+        setShowSettings(true);
+      }
     } catch {
       // Backend not running yet — no warnings shown
     }
@@ -193,26 +223,44 @@ function App() {
 
   // ── Conversation handlers ───────────────────────────────────────────────
 
-  // "New Conversation" now shows the CouncilPicker instead of immediately creating one
+  // "New Conversation" starts the 3-screen picker flow
   const handleNewConversation = () => {
     if (isNewConversationBlocked) return;
     setCurrentConversation(null);
     setCurrentConversationId(null);
-    setShowPicker(true);
+    setPickerCouncilIds([]);
+    setPickerChairmanId(null);
+    setPickerScreen('council');
   };
 
-  // Called by CouncilPicker when user clicks "Start Conversation"
-  const handleStartConversation = async (selectedModelIds) => {
+  // Screen 1: Council selected → go to chairman picker
+  const handleCouncilSelected = (selectedModelIds) => {
+    setPickerCouncilIds(selectedModelIds);
+    setPickerScreen('chairman');
+  };
+
+  // Screen 2: Chairman selected → go to summarization picker
+  const handleChairmanSelected = (chairmanId) => {
+    setPickerChairmanId(chairmanId);
+    setPickerScreen('summarization');
+  };
+
+  // Screen 3: Summarization selected → create the conversation
+  const handleSummarizationSelected = async (summarizationId) => {
     setIsCreatingConversation(true);
     try {
-      const newConv = await api.createConversation(selectedModelIds);
+      const newConv = await api.createConversation(
+        pickerCouncilIds,
+        pickerChairmanId,
+        summarizationId
+      );
       setConversations((prev) => [
         { id: newConv.id, created_at: newConv.created_at, title: newConv.title, message_count: 0 },
         ...prev,
       ]);
       setCurrentConversationId(newConv.id);
       setCurrentConversation(newConv);
-      setShowPicker(false);
+      setPickerScreen(null);
     } catch (error) {
       console.error('Failed to create conversation:', error);
     } finally {
@@ -221,11 +269,11 @@ function App() {
   };
 
   const handleCancelPicker = () => {
-    setShowPicker(false);
+    setPickerScreen(null);
   };
 
   const handleSelectConversation = (id) => {
-    setShowPicker(false);
+    setPickerScreen(null);
     setCurrentConversationId(id);
   };
 
@@ -355,12 +403,29 @@ function App() {
         blockReason={blockReason}
       />
 
-      {showPicker ? (
+      {pickerScreen === 'council' ? (
         <CouncilPicker
           config={councilConfig}
-          onStart={handleStartConversation}
+          onStart={handleCouncilSelected}
           onCancel={handleCancelPicker}
           onOpenWizard={handleOpenWizard}
+          isCreating={false}
+        />
+      ) : pickerScreen === 'chairman' ? (
+        <ChairmanPicker
+          models={councilConfig?.available_models ?? []}
+          defaultId={councilConfig?.chairman_id ?? ''}
+          onSelect={handleChairmanSelected}
+          onBack={() => setPickerScreen('council')}
+          onCancel={handleCancelPicker}
+        />
+      ) : pickerScreen === 'summarization' ? (
+        <SummarizationPicker
+          models={councilConfig?.available_models ?? []}
+          defaultId={councilConfig?.summarization_model_id ?? ''}
+          onSelect={handleSummarizationSelected}
+          onBack={() => setPickerScreen('chairman')}
+          onCancel={handleCancelPicker}
           isCreating={isCreatingConversation}
         />
       ) : (
