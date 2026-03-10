@@ -541,7 +541,10 @@ async def post_config(request: Request, body: SaveConfigRequest):
         # Sanitize fields
         model.update(_sanitize_model_config(model))
 
-    save_config(config)
+    try:
+        save_config(config)
+    except RuntimeError as e:
+        raise HTTPException(status_code=401, detail=str(e))
     loaded = load_config()
     return {
         "config": _mask_api_keys(loaded),

@@ -410,19 +410,25 @@ def save_config(config: Dict[str, Any]):
     for m in existing.get("available_models", []):
         existing_keys_by_id[m["id"]] = m.get("api_key", "")
 
-    # Encrypt API keys if we have the Fernet key, but preserve masked keys
-    if _fernet_key:
-        clean = copy.deepcopy(clean)
-        for model in clean.get("available_models", []):
-            key = model.get("api_key", "")
-            if _is_masked_key(key):
-                # Key was masked by _mask_api_keys() — preserve original encrypted value
-                model["api_key"] = existing_keys_by_id.get(model["id"], "")
-            else:
-                # Key is plaintext (new or changed) — encrypt it
-                model["api_key"] = _encrypt_api_key(key, _fernet_key)
-    else:
-        clean = copy.deepcopy(clean)
+    # Encrypt API keys before writing — Fernet key MUST be available
+    clean = copy.deepcopy(clean)
+    for model in clean.get("available_models", []):
+        key = model.get("api_key", "")
+        if _is_masked_key(key):
+            # Key was masked by _mask_api_keys() — preserve original encrypted value
+            model["api_key"] = existing_keys_by_id.get(model["id"], "")
+        elif not key:
+            # Empty key — nothing to encrypt
+            model["api_key"] = ""
+        elif _fernet_key:
+            # Key is plaintext (new or changed) — encrypt it
+            model["api_key"] = _encrypt_api_key(key, _fernet_key)
+        else:
+            # Fernet key not available — refuse to store plaintext
+            raise RuntimeError(
+                "Cannot save API keys: encryption key not available. "
+                "Please log in again to re-derive the encryption key."
+            )
 
     # Preserve the password hash from the existing file (callers don't pass it)
     if "password_hash" in existing and "password_hash" not in clean:
